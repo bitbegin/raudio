@@ -315,12 +315,12 @@ OS-audio: context [
 		print-line "================================"
 		print-line ["dev: " dev]
 		either wdev/type = ADEVICE-TYPE-OUTPUT [
-			print-line "	type: input"
+			print-line "    type: input"
 		][
-			print-line "	type: output"
+			print-line "    type: output"
 		]
-		print "	id: "
-		printf ["%ls^/	name: " wdev/id]
+		print "    id: "
+		printf ["%ls^/    name: " wdev/id]
 		printf ["%ls^/" wdev/name]
 		print-line "================================"
 	]
@@ -365,5 +365,129 @@ OS-audio: context [
 		default-device ADEVICE-TYPE-OUTPUT
 	]
 
+	enum-device: func [
+		list		[int-ptr!]
+		end			[int-ptr!]
+		num			[int-ptr!]
+		ethis		[this!]
+		type		[AUDIO-DEVICE-TYPE!]
+		return:		[logic!]
+		/local
+			flag	[integer!]
+			etor	[IMMDeviceEnumerator]
+			hr		[integer!]
+			cols	[com-ptr! value]
+			cthis	[this!]
+			pcol	[IMMDeviceCollection]
+			count	[integer!]
+			i		[integer!]
+			device	[com-ptr! value]
+			dthis	[this!]
+			pdev	[IMMDevice]
+			wdev	[WASAPI-DEVICE!]
+	][
+		flag: either type = ADEVICE-TYPE-OUTPUT [0][1]
+		etor: as IMMDeviceEnumerator ethis/vtbl
+		hr: etor/EnumAudioEndpoints ethis flag DEVICE_STATE_ACTIVE :cols
+		if hr <> 0 [return false]
+		cthis: cols/value
+		pcol: as IMMDeviceCollection cthis/vtbl
+		count: 0
+		hr: pcol/GetCount cthis :count
+		if hr <> 0 [
+			pcol/Release cthis
+			return false
+		]
+		if null? list [
+			num/1: count
+			pcol/Release cthis
+			return true
+		]
+		num/1: 0
+		i: 0
+		loop count [
+			hr: pcol/Item cthis i :device
+			if hr <> 0 [break]
+			dthis: device/value
+			pdev: as IMMDevice dthis/vtbl
+			either list < end [
+				wdev: as WASAPI-DEVICE! allocate size? WASAPI-DEVICE!
+				init-device wdev dthis type
+				list/1: as integer! wdev
+				list: list + 1
+			][
+				pdev/Release dthis
+				pcol/Release cthis
+				return false
+			]
+			num/1: num/1 + 1
+			i: i + 1
+		]
+		pcol/Release cthis
+		true
+	]
 
+	get-devices: func [
+		type		[AUDIO-DEVICE-TYPE!]
+		count		[int-ptr!]			;-- number of input devices
+		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
+		/local
+			hr		[integer!]
+			enum	[com-ptr! value]
+			ethis	[this!]
+			etor	[IMMDeviceEnumerator]
+			list	[int-ptr!]
+			end		[int-ptr!]
+	][
+		count/1: 0
+		hr: CoCreateInstance CLSID_MMDeviceEnumerator 0 CLSCTX_INPROC_SERVER IID_IMMDeviceEnumerator :enum
+		if hr <> 0 [return null]
+		ethis: enum/value
+		etor: as IMMDeviceEnumerator ethis/vtbl
+		unless enum-device null null count ethis type [
+			etor/Release ethis
+			return null
+		]
+		list: as int-ptr! allocate count/1 + 1 * 4
+		end: list + count/1
+		end/1: 0
+		unless enum-device list end count ethis type [
+			etor/Release ethis
+			free as byte-ptr! list
+			return null
+		]
+		etor/Release ethis
+		list
+	]
+
+	input-devices: func [
+		count		[int-ptr!]				;-- number of input devices
+		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
+	][
+		get-devices ADEVICE-TYPE-INPUT count
+	]
+
+	output-devices: func [
+		count		[int-ptr!]				;-- number of output devices
+		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
+	][
+		get-devices ADEVICE-TYPE-OUTPUT count
+	]
+
+	free-device: func [
+		dev			[AUDIO-DEVICE!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+			unk		[IUnknown]
+	][
+		if null? dev [exit]
+		wdev: as WASAPI-DEVICE! dev
+		unk: as IUnknown wdev/this/vtbl
+		unk/Release wdev/this
+		unk: as IUnknown wdev/client/vtbl
+		unk/Release wdev/this
+		free wdev/id
+		free wdev/name
+		free as byte-ptr! wdev
+	]
 ]
