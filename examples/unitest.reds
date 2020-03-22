@@ -22,3 +22,11 @@ print-line [size? u " " len " " len2]
 printf ["%ls^/" t2]
 free t
 free t2
+
+u: as byte-ptr! "你好，Red语言！"
+len3: 0
+unicode/to-unicode u null :len3
+t3: allocate len3
+unicode/to-unicode u t3 :len3
+printf ["%ls^/" t3]
+free t3
