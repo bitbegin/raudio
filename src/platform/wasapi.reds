@@ -723,7 +723,7 @@ OS-audio: context [
 			exit
 		]
 		;-- input
-		if wdev/type = 1 [
+		if wdev/type = ADEVICE-TYPE-INPUT [
 			next-size: 0
 			pcapture: as IAudioCaptureClient wdev/service/vtbl
 			pcapture/GetNextPacketSize wdev/service :next-size
@@ -733,7 +733,22 @@ OS-audio: context [
 			pcapture/GetBuffer wdev/service :data :next-size :flags null null
 			if data = 0 [exit]
 			pcb: as AUDIO-IO-CALLBACK! io-cb
-			pcb dev null ;as int-ptr! data
+			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
+			abuff/input-buffer/sample-type: wdev/sample-type
+			abuff/input-buffer/frames-count: next-size
+			temp: wdev/mix-format/TagChannels >>> 16
+			abuff/input-buffer/channels-count: temp
+			abuff/input-buffer/stride: temp
+			abuff/input-buffer/contiguous?: yes
+			chs: as int-ptr! abuff/input-buffer/channels
+			size: either wdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			step: data
+			loop temp [
+				chs/1: step
+				chs: chs + 1
+				step: step + size
+			]
+			pcb dev abuff
 			pcapture/ReleaseBuffer wdev/service next-size
 			exit
 		]
