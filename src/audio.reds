@@ -148,3 +148,95 @@ audio: context [
 		free p
 	]
 ]
+
+audio-device: context [
+	name: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[byte-ptr!]			;-- unicode16
+	][
+		OS-audio/name dev
+	]
+
+	id: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[byte-ptr!]			;-- unicode16
+	][
+		OS-audio/id dev
+	]
+
+	channels-count: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[integer!]
+	][
+		OS-audio/channels-count dev
+	]
+
+	buffer-size: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[integer!]
+	][
+		OS-audio/buffer-size dev
+	]
+
+	set-buffer-size: func [
+		dev			[AUDIO-DEVICE!]
+		size		[integer!]
+		return:		[logic!]
+	][
+		OS-audio/set-buffer-size dev size
+	]
+
+	sample-rate: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[integer!]
+	][
+		OS-audio/sample-rate dev
+	]
+
+	set-sample-rate: func [
+		dev			[AUDIO-DEVICE!]
+		rate		[integer!]
+		return:		[logic!]
+	][
+		OS-audio/set-sample-rate dev rate
+	]
+
+	input?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+	][
+		OS-audio/input? dev
+	]
+
+	output?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+	][
+		OS-audio/output? dev
+	]
+
+	running?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+	][
+		OS-audio/running? dev
+	]
+
+	can-connect?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+	][true]
+
+	can-process?: func [
+		dev			[AUDIO-DEVICE!]
+		return:	[logic!]
+	][true]
+
+	has-unprocessed-io?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+	][
+		OS-audio/has-unprocessed-io? dev
+	]
+]
+

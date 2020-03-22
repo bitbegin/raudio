@@ -58,7 +58,7 @@ OS-audio: context [
 		stop-cb			[AUDIO-DEVICE-CALLBACK!]
 		running?		[logic!]
 		event			[int-ptr!]
-		frame-count		[integer!]
+		buffer-size		[integer!]
 		service			[this!]
 		thread			[int-ptr!]
 	]
@@ -489,5 +489,145 @@ OS-audio: context [
 		free wdev/id
 		free wdev/name
 		free as byte-ptr! wdev
+	]
+
+	name: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[byte-ptr!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/name
+	]
+
+	id: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[byte-ptr!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/id
+	]
+
+	channels-count: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[integer!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+			ret		[integer!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		ret: wdev/mix-format/TagChannels >>> 16
+		ret
+	]
+
+	buffer-size: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[integer!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/buffer-size
+	]
+
+	set-buffer-size: func [
+		dev			[AUDIO-DEVICE!]
+		count		[integer!]
+		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/buffer-size: count
+		true
+	]
+
+	fixup-mix-format: func [
+		format		[WAVEFORMATEXTENSIBLE!]
+		/local
+			ch		[integer!]
+			bits	[integer!]
+			align	[integer!]
+	][
+		ch: format/TagChannels >>> 16
+		bits: format/AlignBits >>> 16
+		align: ch * bits / 8
+		format/AlignBits: format/AlignBits and FFFF0000h + align
+		format/AvgBytesPerSec: format/SamplesPerSec * ch * bits / 8
+	]
+
+	sample-rate: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[integer!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/mix-format/SamplesPerSec
+	]
+
+	set-sample-rate: func [
+		dev			[AUDIO-DEVICE!]
+		rate		[integer!]
+		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/mix-format/SamplesPerSec: rate
+		fixup-mix-format wdev/mix-format
+		true
+	]
+
+	input?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/type = ADEVICE-TYPE-INPUT
+	]
+
+	output?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/type = ADEVICE-TYPE-OUTPUT
+	]
+
+	running?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/running?
+	]
+
+	has-unprocessed-io?: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+			pad		[integer!]
+			pclient	[IAudioClient]
+			num		[integer!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if null? wdev/client [return false]
+		unless wdev/running? [return false]
+		pad: 0
+		pclient: as IAudioClient wdev/client/vtbl
+		pclient/GetCurrentPadding wdev/client :pad
+		num: wdev/buffer-size - pad
+		num > 0
 	]
 ]
