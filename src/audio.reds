@@ -21,19 +21,38 @@ Red/System []
 	ADEVICE-OUTPUT-CHANGED
 ]
 
+AUDIO-CHANNELS!: alias struct! [
+	ch0				[int-ptr!]
+	ch1				[int-ptr!]
+	ch2				[int-ptr!]
+	ch3				[int-ptr!]
+	ch4				[int-ptr!]
+	ch5				[int-ptr!]
+	ch6				[int-ptr!]
+	ch7				[int-ptr!]
+	ch8				[int-ptr!]
+	ch9				[int-ptr!]
+	ch10			[int-ptr!]
+	ch11			[int-ptr!]
+	ch12			[int-ptr!]
+	ch13			[int-ptr!]
+	ch14			[int-ptr!]
+	ch15			[int-ptr!]
+]
+
 AUDIO-BUFFER!: alias struct! [
 	contiguous?		[logic!]
 	frames-count	[integer!]
 	channels-count	[integer!]
 	sample-type		[AUDIO-SAMPLE-TYPE!]
 	stride			[integer!]
-	channels		[int-ptr!]
+	channels		[AUDIO-CHANNELS! value]
 ]
 
 AUDIO-DEVICE-IO!: alias struct! [
-	input-buffer	[AUDIO-BUFFER!]
+	input-buffer	[AUDIO-BUFFER! value]
 	input-time		[AUDIO-CLOCK!]
-	output-buffer	[AUDIO-BUFFER!]
+	output-buffer	[AUDIO-BUFFER! value]
 	output-time		[AUDIO-CLOCK!]
 ]
 

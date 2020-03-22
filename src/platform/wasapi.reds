@@ -54,6 +54,7 @@ OS-audio: context [
 		name			[byte-ptr!]				;-- unicode format
 		client			[this!]
 		mix-format		[WAVEFORMATEXTENSIBLE! value]
+		sample-type		[AUDIO-SAMPLE-TYPE!]
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
@@ -643,6 +644,7 @@ OS-audio: context [
 		wdev: as WASAPI-DEVICE! dev
 		if wdev/running? [exit]
 		format: wdev/mix-format
+		wdev/sample-type: stype
 		case [
 			;-- float
 			stype = ASAMPLE-TYPE-F32 [
@@ -681,6 +683,11 @@ OS-audio: context [
 			next-size	[integer!]
 			pcapture	[IAudioCaptureClient]
 			flags		[integer!]
+			abuff		[AUDIO-DEVICE-IO! value]
+			temp		[integer!]
+			chs			[int-ptr!]
+			size		[integer!]
+			step		[integer!]
 	][
 		wdev: as WASAPI-DEVICE! dev
 		if null? wdev/client [exit]
@@ -696,7 +703,22 @@ OS-audio: context [
 			prender/GetBuffer wdev/service num :data
 			if data = 0 [exit]
 			pcb: as AUDIO-IO-CALLBACK! io-cb
-			pcb dev null ;as int-ptr! data
+			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
+			abuff/output-buffer/sample-type: wdev/sample-type
+			abuff/output-buffer/frames-count: num
+			temp: wdev/mix-format/TagChannels >>> 16
+			abuff/output-buffer/channels-count: temp
+			abuff/output-buffer/stride: temp
+			abuff/output-buffer/contiguous?: yes
+			chs: as int-ptr! abuff/output-buffer/channels
+			size: either wdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			step: data
+			loop temp [
+				chs/1: step
+				chs: chs + 1
+				step: step + size
+			]
+			pcb dev abuff
 			prender/ReleaseBuffer wdev/service num 0
 			exit
 		]
