@@ -54,8 +54,8 @@ OS-audio: context [
 		name			[byte-ptr!]				;-- unicode format
 		client			[this!]
 		mix-format		[WAVEFORMATEXTENSIBLE! value]
-		io-cb			[AUDIO-IO-CALLBACK!]
-		stop-cb			[AUDIO-DEVICE-CALLBACK!]
+		io-cb			[int-ptr!]
+		stop-cb			[int-ptr!]
 		running?		[logic!]
 		event			[int-ptr!]
 		buffer-size		[integer!]
@@ -629,5 +629,199 @@ OS-audio: context [
 		pclient/GetCurrentPadding wdev/client :pad
 		num: wdev/buffer-size - pad
 		num > 0
+	]
+
+	connect: func [
+		dev			[AUDIO-DEVICE!]
+		stype		[AUDIO-SAMPLE-TYPE!]
+		io-cb		[int-ptr!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+			format	[WAVEFORMATEXTENSIBLE!]
+			bits	[integer!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if wdev/running? [exit]
+		format: wdev/mix-format
+		case [
+			;-- float
+			stype = ASAMPLE-TYPE-F32 [
+				copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+				bits: 32
+			]
+			;-- int32
+			stype = ASAMPLE-TYPE-I32 [
+				copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
+				bits: 32
+			]
+			;-- int16
+			stype = ASAMPLE-TYPE-I16 [
+				copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
+				bits: 16
+			]
+		]
+
+		format/AlignBits: format/AlignBits and 0000FFFFh
+		format/AlignBits: format/AlignBits + (bits << 16)
+		fixup-mix-format format
+		wdev/io-cb: io-cb
+	]
+
+	process: func [
+		dev				[AUDIO-DEVICE!]
+		io-cb			[int-ptr!]
+		/local
+			wdev		[WASAPI-DEVICE!]
+			pclient		[IAudioClient]
+			pad			[integer!]
+			num			[integer!]
+			prender		[IAudioRenderClient]
+			data		[integer!]
+			pcb			[AUDIO-IO-CALLBACK!]
+			next-size	[integer!]
+			pcapture	[IAudioCaptureClient]
+			flags		[integer!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if null? wdev/client [exit]
+		pclient: as IAudioClient wdev/client/vtbl
+		;-- output
+		if wdev/type = ADEVICE-TYPE-OUTPUT [
+			pad: 0
+			pclient/GetCurrentPadding wdev/client :pad
+			num: wdev/buffer-size - pad
+			if num = 0 [exit]
+			prender: as IAudioRenderClient wdev/service/vtbl
+			data: 0
+			prender/GetBuffer wdev/service num :data
+			if data = 0 [exit]
+			pcb: as AUDIO-IO-CALLBACK! io-cb
+			pcb dev null ;as int-ptr! data
+			prender/ReleaseBuffer wdev/service num 0
+			exit
+		]
+		;-- input
+		if wdev/type = 1 [
+			next-size: 0
+			pcapture: as IAudioCaptureClient wdev/service/vtbl
+			pcapture/GetNextPacketSize wdev/service :next-size
+			if next-size = 0 [exit]
+			flags: 0
+			data: 0
+			pcapture/GetBuffer wdev/service :data :next-size :flags null null
+			if data = 0 [exit]
+			pcb: as AUDIO-IO-CALLBACK! io-cb
+			pcb dev null ;as int-ptr! data
+			pcapture/ReleaseBuffer wdev/service next-size
+			exit
+		]
+	]
+
+	thread-cb: func [
+		[stdcall]
+		dev				[AUDIO-DEVICE!]
+		/local
+			wdev		[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		SetThreadPriority wdev/thread 15
+		while [wdev/running?][
+			unless null? wdev/io-cb [
+				process dev wdev/io-cb
+			]
+			wait dev
+		]
+	]
+
+	start: func [
+		dev			[audio-device!]
+		start-cb	[int-ptr!]				;-- audio-device-callback!
+		stop-cb		[int-ptr!]				;-- audio-device-callback!
+		return:		[logic!]
+		/local
+			wdev		[WASAPI-DEVICE!]
+			period		[REFERENCE_TIME! value]
+			ref-time	[REFERENCE_TIME! value]
+			buf-time	[REFERENCE_TIME! value]
+			pclient		[IAudioClient]
+			hr			[integer!]
+			service		[com-ptr! value]
+			p			[int-ptr!]
+			start_cb	[AUDIO-DEVICE-CALLBACK!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if null? wdev/client [return false]
+		if wdev/running? [return true]
+		wdev/event: CreateEvent null no no null
+		if null? wdev/event [return false]
+		period/r1: 0
+		period/r2: 0
+		ref-time/r1: 10'000'000
+		ref-time/r2: 0
+		buf-time/r1: 0
+		buf-time/r2: 0
+		pclient: as IAudioClient wdev/client/vtbl
+		hr: pclient/Initialize wdev/client 0 00140000h buf-time period wdev/mix-format null
+		if hr <> 0 [return false]
+		p: either wdev/type = ADEVICE-TYPE-OUTPUT [IID_IAudioRenderClient][IID_IAudioCaptureClient]
+		hr: pclient/GetService wdev/client p :service
+		if hr = 0 [
+			wdev/service: service/value
+		]
+		hr: pclient/GetBufferSize wdev/client :wdev/buffer-size
+		if hr <> 0 [return false]
+		hr: pclient/SetEventHandle wdev/client wdev/event
+		if hr <> 0 [return false]
+		hr: pclient/Start wdev/client
+		if hr <> 0 [return false]
+		wdev/running?: yes
+
+		unless null? wdev/io-cb [
+			wdev/thread: _beginthreadex null 0 as int-ptr! :thread-cb dev 0 null
+		]
+		unless null? start-cb [
+			start_cb: as AUDIO-DEVICE-CALLBACK! start-cb
+			start_cb dev
+		]
+		wdev/stop-cb: stop-cb
+		true
+	]
+
+	stop: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+			pclient	[IAudioClient]
+			stop_cb	[AUDIO-DEVICE-CALLBACK!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if wdev/running? [
+			wdev/running?: no
+			unless null? wdev/thread [
+				WaitForSingleObject wdev/thread -1
+			]
+			unless null? wdev/client [
+				pclient: as IAudioClient wdev/client/vtbl
+				pclient/Stop wdev/client
+			]
+			unless null? wdev/event [
+				CloseHandle wdev/event
+			]
+			unless null? wdev/stop-cb [
+				stop_cb: as AUDIO-DEVICE-CALLBACK! wdev/stop-cb
+				stop_cb dev
+			]
+		]
+		true
+	]
+
+	wait: func [
+		dev			[AUDIO-DEVICE!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		WaitForSingleObject wdev/event -1
 	]
 ]

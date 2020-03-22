@@ -238,5 +238,35 @@ audio-device: context [
 	][
 		OS-audio/has-unprocessed-io? dev
 	]
+
+	connect: func [
+		dev			[AUDIO-DEVICE!]
+		stype		[AUDIO-SAMPLE-TYPE!]
+		io-cb		[int-ptr!]				;-- audio-io-callback!
+	][
+		OS-audio/connect dev stype io-cb
+	]
+
+	start: func [
+		dev			[audio-device!]
+		start-cb	[int-ptr!]				;-- audio-device-callback!
+		stop-cb		[int-ptr!]				;-- audio-device-callback!
+		return:		[logic!]
+	][
+		OS-audio/start dev start-cb stop-cb
+	]
+
+	stop: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+	][
+		OS-audio/stop dev
+	]
+
+	wait: func [
+		dev			[AUDIO-DEVICE!]
+	][
+		OS-audio/wait dev
+	]
 ]
 
