@@ -970,6 +970,7 @@ OS-audio: context [
 		unk: as IUnknown dev-monitor/ethis/vtbl
 		unk/Release dev-monitor/ethis
 		CoUninitialize
+		set-memory as byte-ptr! dev-monitor #"^(00)" size? DEVICE-MONITOR!
 	]
 
 	IAddRef: func [
@@ -1161,7 +1162,9 @@ OS-audio: context [
 	][
 		notifys: as int-ptr! dev-monitor/notifys
 		loop 3 [
-			free-notify-client as this! notifys/1
+			if notifys/1 <> 0 [
+				free-notify-client as this! notifys/1
+			]
 			notifys: notifys + 1
 		]
 		free-monitor
