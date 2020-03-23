@@ -119,8 +119,8 @@ OS-audio: context [
 	]
 
 	REFERENCE_TIME!: alias struct! [
-		r1		[integer!]
-		r2		[integer!]
+		low		[integer!]
+		high	[integer!]
 	]
 
 	IMMDeviceEnumerator: alias struct! [
@@ -797,16 +797,16 @@ OS-audio: context [
 		if wdev/running? [return true]
 		wdev/event: CreateEvent null no no null
 		if null? wdev/event [return false]
-		period/r1: 0
-		period/r2: 0
-		buf-time/r1: 0
-		buf-time/r2: 0
+		period/low: 0
+		period/high: 0
+		buf-time/low: 0
+		buf-time/high: 0
 		ft: 10'000'000.0
 		ft: ft * as float! wdev/buffer-size
 		ft: ft / as float! wdev/mix-format/SamplesPerSec
-		buf-time/r2: as integer! ft / 4294967296.0
-		ft2: (as float! buf-time/r2) * 4294967296.0
-		buf-time/r1: as integer! ft - ft2
+		buf-time/high: as integer! ft / 4294967296.0
+		ft2: (as float! buf-time/high) * 4294967296.0
+		buf-time/low: as integer! ft - ft2
 		pclient: as IAudioClient wdev/client/vtbl
 		hr: pclient/Initialize wdev/client 0 00140000h buf-time period wdev/mix-format null
 		if hr <> 0 [return false]
