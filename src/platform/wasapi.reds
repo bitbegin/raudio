@@ -778,7 +778,8 @@ OS-audio: context [
 		/local
 			wdev		[WASAPI-DEVICE!]
 			period		[REFERENCE_TIME! value]
-			ref-time	[REFERENCE_TIME! value]
+			ft			[float!]
+			ft2			[float!]
 			buf-time	[REFERENCE_TIME! value]
 			pclient		[IAudioClient]
 			hr			[integer!]
@@ -793,10 +794,14 @@ OS-audio: context [
 		if null? wdev/event [return false]
 		period/r1: 0
 		period/r2: 0
-		ref-time/r1: 10'000'000
-		ref-time/r2: 0
 		buf-time/r1: 0
 		buf-time/r2: 0
+		ft: 10'000'000.0
+		ft: ft * as float! wdev/buffer-size
+		ft: ft / as float! wdev/mix-format/SamplesPerSec
+		buf-time/r2: as integer! ft / 4294967296.0
+		ft2: (as float! buf-time/r2) * 4294967296.0
+		buf-time/r1: as integer! ft - ft2
 		pclient: as IAudioClient wdev/client/vtbl
 		hr: pclient/Initialize wdev/client 0 00140000h buf-time period wdev/mix-format null
 		if hr <> 0 [return false]
