@@ -37,8 +37,8 @@ print-all-device
 audio/set-device-changed-callback ADEVICE-LIST-CHANGED as int-ptr! :list-cb
 audio/set-device-changed-callback DEFAULT-INPUT-CHANGED as int-ptr! :input-cb
 
-forever [
-	sleep 50 * 1000
-]
+sleep 50 * 1000
 
 audio/free-device-changed-callback
+
+audio/close

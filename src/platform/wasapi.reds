@@ -235,7 +235,11 @@ OS-audio: context [
 
 	init: does [
 		set-memory as byte-ptr! dev-monitor #"^(00)" size? DEVICE-MONITOR!
-		CoInitializeEx 0 COINIT_APARTMENTTHREADED
+		;CoInitializeEx 0 COINIT_APARTMENTTHREADED
+	]
+
+	close: does [
+		;CoUninitialize
 	]
 
 	get-device-name: func [
@@ -375,6 +379,7 @@ OS-audio: context [
 			wdev	[WASAPI-DEVICE!]
 	][
 		flag: either type = ADEVICE-TYPE-OUTPUT [0][1]
+		CoInitialize 0
 		hr: CoCreateInstance CLSID_MMDeviceEnumerator 0 CLSCTX_INPROC_SERVER IID_IMMDeviceEnumerator :enum
 		if hr <> 0 [return null]
 		ethis: enum/value
@@ -476,6 +481,7 @@ OS-audio: context [
 			end		[int-ptr!]
 	][
 		count/1: 0
+		CoInitialize 0
 		hr: CoCreateInstance CLSID_MMDeviceEnumerator 0 CLSCTX_INPROC_SERVER IID_IMMDeviceEnumerator :enum
 		if hr <> 0 [return null]
 		ethis: enum/value
@@ -510,7 +516,7 @@ OS-audio: context [
 		get-devices ADEVICE-TYPE-OUTPUT count
 	]
 
-	free-device: func [
+	free-device*: func [
 		dev			[AUDIO-DEVICE!]
 		/local
 			wdev	[WASAPI-DEVICE!]
@@ -530,6 +536,36 @@ OS-audio: context [
 		free wdev/id
 		free wdev/name
 		free as byte-ptr! wdev
+	]
+
+	free-device: func [
+		dev			[AUDIO-DEVICE!]
+	][
+		free-device* dev
+		CoUninitialize
+	]
+
+	free-devices: func [
+		devs		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
+		count		[integer!]				;-- number of devices
+		/local
+			p		[byte-ptr!]
+			wdev	[WASAPI-DEVICE!]
+			otype	[integer!]
+	][
+		if null? devs [exit]
+		p: as byte-ptr! devs
+		otype: -1
+		loop count [
+			wdev: as WASAPI-DEVICE! devs/1
+			if wdev/type <> otype [
+				otype: wdev/type
+				CoUninitialize
+			]
+			free-device* as AUDIO-DEVICE! devs/1
+			devs: devs + 1
+		]
+		free p
 	]
 
 	name: func [
@@ -920,6 +956,7 @@ OS-audio: context [
 			ethis	[this!]
 	][
 		if null? dev-monitor/ethis [
+			CoInitialize 0
 			hr: CoCreateInstance CLSID_MMDeviceEnumerator 0 CLSCTX_INPROC_SERVER IID_IMMDeviceEnumerator :enum
 			if hr <> 0 [exit]
 			dev-monitor/ethis: enum/value
@@ -932,6 +969,7 @@ OS-audio: context [
 	][
 		unk: as IUnknown dev-monitor/ethis/vtbl
 		unk/Release dev-monitor/ethis
+		CoUninitialize
 	]
 
 	IAddRef: func [

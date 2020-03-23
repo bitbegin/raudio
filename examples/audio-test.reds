@@ -98,3 +98,5 @@ audio-device/start dev null null
 sleep 5 * 1000
 
 audio/free-device dev
+
+audio/close

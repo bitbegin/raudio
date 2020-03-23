@@ -79,6 +79,9 @@ audio: context [
 	init: does [
 		OS-audio/init
 	]
+	close: does [
+		OS-audio/close
+	]
 
 	dump-device: func [
 		dev			[audio-device!]
@@ -157,16 +160,8 @@ audio: context [
 	free-devices: func [
 		devs		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
 		count		[integer!]				;-- number of devices
-		/local
-			p		[byte-ptr!]
 	][
-		if null? devs [exit]
-		p: as byte-ptr! devs
-		loop count [
-			free-device as AUDIO-DEVICE! devs/1
-			devs: devs + 1
-		]
-		free p
+		OS-audio/free-devices devs count
 	]
 
 	set-device-changed-callback: func [

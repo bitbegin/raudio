@@ -32,6 +32,10 @@ IUnknown: alias struct! [
 
 #import [
 	"ole32.dll" stdcall [
+		CoInitialize: "CoInitialize" [
+			reserved	[integer!]
+			return:		[integer!]
+		]
 		CoInitializeEx: "CoInitializeEx" [
 			reserved	[integer!]
 			dwCoInit	[integer!]
