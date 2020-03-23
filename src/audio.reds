@@ -16,9 +16,9 @@ Red/System []
 ]
 
 #enum AUDIO-DEVICE-EVENT! [
-	ADEVICE-CHANGED
-	ADEVICE-INPUT-CHANGED
-	ADEVICE-OUTPUT-CHANGED
+	ADEVICE-LIST-CHANGED
+	DEFAULT-INPUT-CHANGED
+	DEFAULT-OUTPUT-CHANGED
 ]
 
 AUDIO-CHANNELS!: alias struct! [
@@ -62,6 +62,8 @@ AUDIO-IO-CALLBACK!: alias function! [
 ]
 
 AUDIO-DEVICE-CALLBACK!: alias function! [dev [AUDIO-DEVICE!]]
+
+AUDIO-CHANGED-CALLBACK!: alias function! []
 
 #include %utils/unicode.reds
 
@@ -165,6 +167,16 @@ audio: context [
 			devs: devs + 1
 		]
 		free p
+	]
+
+	set-device-changed-callback: func [
+		event		[AUDIO-DEVICE-EVENT!]
+		cb			[int-ptr!]				;-- audio-changed-callback!
+	][
+		OS-audio/set-device-changed-callback event cb
+	]
+	free-device-changed-callback: does [
+		OS-audio/free-device-changed-callback
 	]
 ]
 

@@ -26,6 +26,21 @@ OS-audio: context [
 	KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: [00000003h 00100000h AA000080h 719B3800h]
 	;-- 00000001-0000-0010-8000-00aa00389b71
 	KSDATAFORMAT_SUBTYPE_PCM: [00000001h 00100000h AA000080h 719B3800h]
+	;-- 7991EEC9-7E89-4D85-8390-6C703CEC60C0
+	IID_IMMNotificationClient: [7991EEC9h 4D857E89h 706C9083h C060EC3Ch]
+
+
+	DEVICE-MONITOR-NOTIFY!: alias struct! [
+		list-notify		[this!]
+		input-notify	[this!]
+		output-notify	[this!]
+	]
+	DEVICE-MONITOR!: alias struct! [
+		ethis		[this!]
+		notifys		[DEVICE-MONITOR-NOTIFY! value]
+	]
+	;-- instance for device changed
+	dev-monitor: declare DEVICE-MONITOR!
 
 	#define DEVICE_STATE_ACTIVE		1
 	#define STGM_READ				0
@@ -35,6 +50,11 @@ OS-audio: context [
 		len			[integer!]
 		desc		[int-ptr!]
 		inherit?	[logic!]
+	]
+
+	PROPERTYKEY!: alias struct! [
+		fmtid		[GUID! value]
+		pid			[integer!]
 	]
 
 	WAVEFORMATEXTENSIBLE!: alias struct! [
@@ -133,8 +153,8 @@ OS-audio: context [
 		EnumAudioEndpoints			[function! [this [this!] dataFlow [integer!] dwStateMask [integer!] ppDevices [com-ptr!] return: [integer!]]]
 		GetDefaultAudioEndpoint		[function! [this [this!] dataFlow [integer!] role [integer!] ppEndpoint [com-ptr!] return: [integer!]]]
 		GetDevice					[function! [this [this!] pwstrId [byte-ptr!] ppDevice [com-ptr!] return: [integer!]]]
-		RegisterEndpointNotificationCallback	[integer!]
-		UnregisterEndpointNotificationCallback	[integer!]
+		RegisterEndpointNotificationCallback	[function! [this [this!] pClient [this!] return: [integer!]]]
+		UnregisterEndpointNotificationCallback	[function! [this [this!] pClient [this!] return: [integer!]]]
 	]
 
 	IMMDeviceCollection: alias struct! [
@@ -202,7 +222,19 @@ OS-audio: context [
 		Commit						[function! [this [this!] return: [integer!]]]
 	]
 
+	IMMNotificationClient: alias struct! [
+		QueryInterface				[QueryInterface!]
+		AddRef						[AddRef!]
+		Release						[Release!]
+		OnDeviceStateChanged		[function! [this [this!] id [int-ptr!] state [integer!] return: [integer!]]]
+		OnDeviceAdded				[function! [this [this!] id [int-ptr!] return: [integer!]]]
+		OnDeviceRemoved				[function! [this [this!] id [int-ptr!] return: [integer!]]]
+		OnDefaultDeviceChanged		[function! [this [this!] flow [integer!] role [integer!] id [int-ptr!] return: [integer!]]]
+		OnPropertyValueChanged		[function! [this [this!] id [int-ptr!] key [PROPERTYKEY! value] return: [integer!]]]
+	]
+
 	init: does [
+		set-memory as byte-ptr! dev-monitor #"^(00)" size? DEVICE-MONITOR!
 		CoInitializeEx 0 COINIT_APARTMENTTHREADED
 	]
 
@@ -879,5 +911,221 @@ OS-audio: context [
 		ms			[integer!]
 	][
 		mSleep ms
+	]
+
+	init-monitor: func [
+		/local
+			hr		[integer!]
+			enum	[com-ptr! value]
+			ethis	[this!]
+	][
+		if null? dev-monitor/ethis [
+			hr: CoCreateInstance CLSID_MMDeviceEnumerator 0 CLSCTX_INPROC_SERVER IID_IMMDeviceEnumerator :enum
+			if hr <> 0 [exit]
+			dev-monitor/ethis: enum/value
+		]
+	]
+
+	free-monitor: func [
+		/local
+			unk		[IUnknown]
+	][
+		unk: as IUnknown dev-monitor/ethis/vtbl
+		unk/Release dev-monitor/ethis
+	]
+
+	IAddRef: func [
+		[stdcall]
+		this		[this!]
+		return:		[integer!]
+	][1]
+
+	IRelease: func [
+		[stdcall]
+		this		[this!]
+		return:		[integer!]
+	][0]
+
+	IQueryInterface: func [
+		[stdcall]
+		this		[this!]
+		riid		[int-ptr!]
+		req			[int-ptr!]
+		return:		[integer!]
+	][
+		if 0 = compare-memory as byte-ptr! IID_IUnknown as byte-ptr! riid size? GUID! [
+			req/1: as integer! this
+			return 0
+		]
+		if 0 = compare-memory as byte-ptr! IID_IMMNotificationClient as byte-ptr! riid size? GUID! [
+			req/1: as integer! this
+			return 0
+		]
+		req/1: 0
+		80004002h
+	]
+
+	OnDefaultDeviceChanged: func [
+		[stdcall]
+		this		[this!]
+		flow		[integer!]
+		role		[integer!]
+		id			[byte-ptr!]
+		return:		[integer!]
+		/local
+			p		[int-ptr!]
+			event	[integer!]
+			d-cb	[AUDIO-CHANGED-CALLBACK!]
+	][
+		;-- ERole::eConsole
+		if role <> 0 [return 0]
+		;-- EDataFlow::eRender
+		p: as int-ptr! this
+		event: p/2
+		if flow = 0 [
+			if event <> DEFAULT-OUTPUT-CHANGED [return 0]
+		]
+		;-- EDataFlow::eCapture
+		if flow = 1 [
+			if event <> DEFAULT-INPUT-CHANGED [return 0]
+		]
+		d-cb: as AUDIO-CHANGED-CALLBACK! p/3
+		d-cb
+		0
+	]
+
+	OnDeviceAdded: func [
+		[stdcall]
+		this		[this!]
+		id			[byte-ptr!]
+		return:		[integer!]
+		/local
+			p		[int-ptr!]
+			event	[integer!]
+			d-cb	[AUDIO-CHANGED-CALLBACK!]
+	][
+		p: as int-ptr! this
+		event: p/2
+		if event <> ADEVICE-LIST-CHANGED [return 0]
+		d-cb: as AUDIO-CHANGED-CALLBACK! p/3
+		d-cb
+		0
+	]
+
+	OnDeviceRemoved: func [
+		[stdcall]
+		this		[this!]
+		id			[byte-ptr!]
+		return:		[integer!]
+		/local
+			p		[int-ptr!]
+			event	[integer!]
+			d-cb	[AUDIO-CHANGED-CALLBACK!]
+	][
+		p: as int-ptr! this
+		event: p/2
+		if event <> ADEVICE-LIST-CHANGED [return 0]
+		d-cb: as AUDIO-CHANGED-CALLBACK! p/3
+		d-cb
+		0
+	]
+
+	OnDeviceStateChanged: func [
+		[stdcall]
+		this		[this!]
+		id			[byte-ptr!]
+		state		[integer!]
+		return:		[integer!]
+		/local
+			p		[int-ptr!]
+			event	[integer!]
+			d-cb	[AUDIO-CHANGED-CALLBACK!]
+	][
+		p: as int-ptr! this
+		event: p/2
+		if event <> ADEVICE-LIST-CHANGED [return 0]
+		d-cb: as AUDIO-CHANGED-CALLBACK! p/3
+		d-cb
+		0
+	]
+
+	OnPropertyValueChanged: func [
+		[stdcall]
+		this		[this!]
+		id			[byte-ptr!]
+		key			[PROPERTYKEY! value]
+	][0]
+
+	create-notify-client: func [
+		event		[AUDIO-DEVICE-EVENT!]
+		cb			[int-ptr!]
+		return:		[this!]
+		/local
+			this	[int-ptr!]
+			nclient	[int-ptr!]
+	][
+		nclient: as int-ptr! allocate size? IMMNotificationClient
+		this: as int-ptr! allocate 16
+		this/1: as integer! nclient
+		this/2: event
+		this/3: as integer! cb
+		nclient/1: as integer! :IQueryInterface
+		nclient/2: as integer! :IAddRef
+		nclient/3: as integer! :IRelease
+		nclient/4: as integer! :OnDeviceStateChanged
+		nclient/5: as integer! :OnDeviceAdded
+		nclient/6: as integer! :OnDeviceRemoved
+		nclient/7: as integer! :OnDefaultDeviceChanged
+		nclient/8: as integer! :OnPropertyValueChanged
+		as this! this
+	]
+
+	free-notify-client: func [
+		this			[this!]
+		/local
+			etor		[IMMDeviceEnumerator]
+			hr			[integer!]
+			p			[int-ptr!]
+			client		[byte-ptr!]
+	][
+		etor: as IMMDeviceEnumerator dev-monitor/ethis/vtbl
+		hr: etor/UnRegisterEndpointNotificationCallback dev-monitor/ethis this
+		p: as int-ptr! this
+		client: as byte-ptr! p/1
+		free client
+		free as byte-ptr! this
+	]
+
+	set-device-changed-callback: func [
+		event			[AUDIO-DEVICE-EVENT!]
+		cb				[int-ptr!]				;-- audio-changed-callback!
+		/local
+			etor		[IMMDeviceEnumerator]
+			this		[this!]
+			hr			[integer!]
+			notifys		[int-ptr!]
+	][
+		init-monitor
+		etor: as IMMDeviceEnumerator dev-monitor/ethis/vtbl
+		this: create-notify-client event cb
+		hr: etor/RegisterEndpointNotificationCallback dev-monitor/ethis this
+		notifys: as int-ptr! dev-monitor/notifys
+		notifys: notifys + event
+		if notifys/1 <> 0 [
+			free-notify-client as this! notifys/1
+		]
+		notifys/1: as integer! this
+	]
+
+	free-device-changed-callback: func [
+		/local
+			notifys		[int-ptr!]
+	][
+		notifys: as int-ptr! dev-monitor/notifys
+		loop 3 [
+			free-notify-client as this! notifys/1
+			notifys: notifys + 1
+		]
+		free-monitor
 	]
 ]

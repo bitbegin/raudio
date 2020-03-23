@@ -62,6 +62,9 @@ IUnknown: alias struct! [
 #define CLSCTX_INPROC_HANDLER	2
 #define CLSCTX_INPROC           3						;-- CLSCTX_INPROC_SERVER or CLSCTX_INPROC_HANDLER
 
+;-- 00000000-0000-0000-C000-000000000046
+IID_IUnknown: [00000000h 00000000h 000000C0h 46000000h]
+
 GUID!: alias struct! [
 	guid1	[integer!]
 	guid2	[integer!]
