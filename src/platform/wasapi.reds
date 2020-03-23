@@ -482,11 +482,16 @@ OS-audio: context [
 			unk		[IUnknown]
 	][
 		if null? dev [exit]
+		stop dev
 		wdev: as WASAPI-DEVICE! dev
+		unless null? wdev/service [
+			unk: as IUnknown wdev/service/vtbl
+			unk/Release wdev/service
+		]
 		unk: as IUnknown wdev/this/vtbl
 		unk/Release wdev/this
 		unk: as IUnknown wdev/client/vtbl
-		unk/Release wdev/this
+		unk/Release wdev/client
 		free wdev/id
 		free wdev/name
 		free as byte-ptr! wdev
