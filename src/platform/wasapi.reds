@@ -115,6 +115,9 @@ OS-audio: context [
 				name			[byte-ptr!]
 				return:			[int-ptr!]
 			]
+			mSleep: "Sleep" [
+				dwMilliseconds	[integer!]
+			]
 		]
 	]
 
@@ -870,5 +873,11 @@ OS-audio: context [
 	][
 		wdev: as WASAPI-DEVICE! dev
 		WaitForSingleObject wdev/event -1
+	]
+
+	sleep: func [
+		ms			[integer!]
+	][
+		mSleep ms
 	]
 ]

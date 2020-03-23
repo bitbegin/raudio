@@ -289,3 +289,4 @@ audio-device: context [
 	]
 ]
 
+sleep: func [ms [integer!]][OS-audio/sleep ms]

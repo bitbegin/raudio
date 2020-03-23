@@ -95,6 +95,6 @@ rate: as float! audio-device/sample-rate dev
 delta: freq * pi / rate
 audio-device/connect dev ASAMPLE-TYPE-F32 as int-ptr! :wave-cb
 audio-device/start dev null null
-forever [1]
+sleep 5 * 1000
 
 audio/free-device dev
