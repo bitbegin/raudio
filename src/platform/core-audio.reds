@@ -12,6 +12,19 @@ OS-audio: context [
 
 	dev-monitor: declare integer!
 
+	#import [
+		LIBC-file cdecl [
+			usleep: "usleep" [
+				us			[integer!]
+				return:		[integer!]
+			]
+			sec.sleep: "sleep" [
+				s			[integer!]
+				return:		[integer!]
+			]
+		]
+	]
+
 	init: does [
 		dev-monitor: 0
 	]
@@ -176,8 +189,19 @@ OS-audio: context [
 
 	sleep: func [
 		ms			[integer!]
+		/local
+			s		[integer!]
+			r		[integer!]
 	][
-		0
+		s: ms / 1000
+		if s <> 0 [
+			sec.sleep s
+		]
+		r: ms - (s * 1000)
+		if r <> 0 [
+			r: r * 1000
+			usleep r
+		]
 	]
 
 	init-monitor: func [
