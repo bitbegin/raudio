@@ -245,3 +245,122 @@ unicode: context [
 #define LC_ALL		0
 #define LC_CTYPE	2
 setlocale LC_ALL ""
+
+#enum TYPE-STRING! [
+	TYPE-STRING-UTF8
+	TYPE-STRING-UNICODE
+]
+
+unicode-string!: alias struct! [
+	type	[integer!]
+]
+
+type-string: context [
+	load-utf8: func [
+		utf8		[byte-ptr!]
+		return:		[unicode-string!]
+		/local
+			len		[integer!]
+			buf		[int-ptr!]
+			data	[byte-ptr!]
+	][
+		if null? utf8 [return null]
+		len: 1 + length? as c-string! utf8
+		buf: as int-ptr! allocate 4 + len
+		buf/1: TYPE-STRING-UTF8
+		data: as byte-ptr! buf + 1
+		copy-memory data utf8 len
+		as unicode-string! buf
+	]
+	load-unicode: func [
+		code		[byte-ptr!]
+		return:		[unicode-string!]
+		/local
+			len		[integer!]
+			buf		[int-ptr!]
+			data	[byte-ptr!]
+	][
+		if null? code [return null]
+		len: 2 * unicode/unicode-length? code
+		buf: as int-ptr! allocate 4 + len
+		buf/1: TYPE-STRING-UNICODE
+		data: as byte-ptr! buf + 1
+		copy-memory data code len
+		as unicode-string! buf
+	]
+	release: func [
+		str			[unicode-string!]
+	][
+		free as byte-ptr! str
+	]
+
+	win-print: func [
+		str			[unicode-string!]
+		/local
+			buf		[int-ptr!]
+			p		[byte-ptr!]
+			len		[integer!]
+			code	[byte-ptr!]
+	][
+		if null? str [print "null" exit]
+		if str/type = TYPE-STRING-UNICODE [
+			buf: as int-ptr! str
+			p: as byte-ptr! buf + 1
+			printf ["%ls" p]
+			exit
+		]
+		if str/type = TYPE-STRING-UTF8 [
+			buf: as int-ptr! str
+			p: as byte-ptr! buf + 1
+			len: 0
+			unless unicode/to-unicode p null :len [
+				print "null" exit
+			]
+			code: allocate len
+			unicode/to-unicode p code :len
+			printf ["%ls" code]
+			free code
+			exit
+		]
+	]
+
+	mac-print: func [
+		str			[unicode-string!]
+		/local
+			buf		[int-ptr!]
+			p		[byte-ptr!]
+			len		[integer!]
+			utf8	[byte-ptr!]
+	][
+		if null? str [print "null" exit]
+		if str/type = TYPE-STRING-UTF8 [
+			buf: as int-ptr! str
+			p: as byte-ptr! buf + 1
+			printf ["%s" p]
+			exit
+		]
+		if str/type = TYPE-STRING-UNICODE [
+			buf: as int-ptr! str
+			p: as byte-ptr! buf + 1
+			len: 0
+			unless unicode/to-utf8 p null :len [
+				print "null" exit
+			]
+			utf8: allocate len
+			unicode/to-utf8 p utf8 :len
+			printf ["%s" utf8]
+			free utf8
+			exit
+		]
+	]
+
+	uprint: func [
+		str			[unicode-string!]
+	][
+#switch OS [
+	Windows [win-print str]
+	#default [mac-print str]
+]
+	]
+
+]
