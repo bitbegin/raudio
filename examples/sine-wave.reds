@@ -38,9 +38,9 @@ print-line "default output device:"
 dev: audio/default-output-device
 audio/dump-device dev
 print-line "audio-device test:"
-printf ["    id: %ls^/" audio-device/id dev]
-printf ["    name: %ls^/" audio-device/name dev]
-print-line ["    channels: " audio-device/channels-count dev]
+print "    name: "
+type-string/uprint audio-device/name dev
+print-line ["^/    channels: " audio-device/channels-count dev]
 ;audio-device/set-buffer-size dev 10
 print-line ["    buffer size: " audio-device/buffer-size dev]
 ;audio-device/set-sample-rate dev 20

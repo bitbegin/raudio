@@ -291,6 +291,7 @@ type-string: context [
 	release: func [
 		str			[unicode-string!]
 	][
+		if null? str [exit]
 		free as byte-ptr! str
 	]
 

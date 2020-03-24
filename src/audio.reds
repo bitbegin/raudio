@@ -178,16 +178,9 @@ audio: context [
 audio-device: context [
 	name: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[byte-ptr!]			;-- unicode16
+		return:		[unicode-string!]
 	][
 		OS-audio/name dev
-	]
-
-	id: func [
-		dev			[AUDIO-DEVICE!]
-		return:		[byte-ptr!]			;-- unicode16
-	][
-		OS-audio/id dev
 	]
 
 	channels-count: func [

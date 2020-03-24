@@ -70,8 +70,8 @@ OS-audio: context [
 	WASAPI-DEVICE!: alias struct! [
 		this			[this!]
 		type			[AUDIO-DEVICE-TYPE!]
-		id				[byte-ptr!]				;-- unicode format
-		name			[byte-ptr!]				;-- unicode format
+		id				[unicode-string!]				;-- unicode format
+		name			[unicode-string!]				;-- unicode format
 		client			[this!]
 		mix-format		[WAVEFORMATEXTENSIBLE! value]
 		sample-type		[AUDIO-SAMPLE-TYPE!]
@@ -245,15 +245,14 @@ OS-audio: context [
 	get-device-name: func [
 		dthis	[this!]
 		pdev	[IMMDevice]
-		return:	[byte-ptr!]
+		return:	[unicode-string!]
 		/local
 			hr		[integer!]
 			prop	[com-ptr! value]
 			pthis	[this!]
 			pprop	[IPropertyStore]
 			buf		[int-ptr!]
-			len		[integer!]
-			nbuf	[byte-ptr!]
+			ustr	[unicode-string!]
 	][
 		hr: pdev/OpenPropertyStore dthis STGM_READ :prop
 		if hr <> 0 [return null]
@@ -267,31 +266,27 @@ OS-audio: context [
 			return null
 		]
 		pprop/Release pthis
-		len: unicode/unicode-length? as byte-ptr! buf/3
-		nbuf: allocate len * 2
-		copy-memory nbuf as byte-ptr! buf/3 len * 2
+		ustr: type-string/load-unicode as byte-ptr! buf/3
 		PropVariantClear buf
-		nbuf
+		ustr
 	]
 
 	get-device-id: func [
 		dthis	[this!]
 		pdev	[IMMDevice]
-		return:	[byte-ptr!]
+		return:	[unicode-string!]
 		/local
 			id		[integer!]
 			hr		[integer!]
 			len		[integer!]
-			buf		[byte-ptr!]
+			ustr	[unicode-string!]
 	][
 		id: 0
 		hr: pdev/GetId dthis :id
 		if hr <> 0 [return null]
-		len: unicode/unicode-length? as byte-ptr! id
-		buf: allocate len * 2
-		copy-memory buf as byte-ptr! id len * 2
+		ustr: type-string/load-unicode as byte-ptr! id
 		CoTaskMemFree id
-		buf
+		ustr
 	]
 
 	get-client: func [
@@ -360,9 +355,10 @@ OS-audio: context [
 			print-line "    type: output"
 		]
 		print "    id: "
-		printf ["%ls^/    name: " wdev/id]
-		printf ["%ls^/" wdev/name]
-		print-line "================================"
+		type-string/uprint wdev/id
+		print "^/    name: "
+		type-string/uprint wdev/name
+		print-line "^/================================"
 	]
 
 	default-device: func [
@@ -533,8 +529,8 @@ OS-audio: context [
 		unk/Release wdev/this
 		unk: as IUnknown wdev/client/vtbl
 		unk/Release wdev/client
-		free wdev/id
-		free wdev/name
+		type-string/release wdev/id
+		type-string/release wdev/name
 		free as byte-ptr! wdev
 	]
 
@@ -570,7 +566,7 @@ OS-audio: context [
 
 	name: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[byte-ptr!]
+		return:		[unicode-string!]
 		/local
 			wdev	[WASAPI-DEVICE!]
 	][
@@ -580,7 +576,7 @@ OS-audio: context [
 
 	id: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[byte-ptr!]
+		return:		[unicode-string!]
 		/local
 			wdev	[WASAPI-DEVICE!]
 	][
