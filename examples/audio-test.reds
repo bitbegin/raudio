@@ -74,7 +74,7 @@ wave-cb: func [
 	frame: 0
 	ch: as int-ptr! out/channels
 	loop out/frames-count [
-		nsample: as float32! 2.0 * sin phase
+		nsample: as float32! 0.2 * sin phase
 		phase: fmod phase + delta 2.0 * pi
 		count: 0
 		loop out/channels-count [
