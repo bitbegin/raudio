@@ -69,10 +69,10 @@ AUDIO-CHANGED-CALLBACK!: alias function! []
 
 #switch OS [
 	Windows  [#include %platform/wasapi.reds]
-	;Syllable [#include %platform/wasapi.reds]
+	Syllable [#include %platform/null.reds]
 	macOS	 [#include %platform/core-audio.reds]
-	;FreeBSD  [#include %platform/wasapi.reds]
-	#default [#include %platform/wasapi.reds]
+	FreeBSD  [#include %platform/null.reds]
+	#default [#include %platform/null.reds]
 ]
 
 audio: context [
