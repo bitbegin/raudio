@@ -350,9 +350,9 @@ OS-audio: context [
 		print-line "================================"
 		print-line ["dev: " dev]
 		either wdev/type = ADEVICE-TYPE-OUTPUT [
-			print-line "    type: input"
+			print-line "    type: speaker"
 		][
-			print-line "    type: output"
+			print-line "    type: microphone"
 		]
 		print "    id: "
 		type-string/uprint wdev/id
@@ -510,6 +510,42 @@ OS-audio: context [
 		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
 	][
 		get-devices ADEVICE-TYPE-OUTPUT count
+	]
+
+	all-devices: func [
+		count		[int-ptr!]				;-- number of devices
+		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
+		/local
+			count1	[integer!]
+			list1	[int-ptr!]
+			count2	[integer!]
+			list2	[int-ptr!]
+			total	[integer!]
+			list	[int-ptr!]
+			end		[int-ptr!]
+	][
+		count/1: 0
+		count1: 0
+		list1: output-devices :count1
+		if null? list1 [count1: 0]
+		count2: 0
+		list2: input-devices :count2
+		if null? list2 [count2: 0]
+		if all [count1 = 0 count2 = 0][return null]
+		total: count1 + count2
+		list: as int-ptr! allocate total + 1 * 4
+		end: list + count/1
+		end/1: 0
+		if count1 <> 0 [
+			copy-memory as byte-ptr! list as byte-ptr! list1 count1 * 4
+			free as byte-ptr! list1
+		]
+		if count2 <> 0 [
+			copy-memory as byte-ptr! list + count1 as byte-ptr! list2 count2 * 4
+			free as byte-ptr! list2
+		]
+		count/1: total
+		list
 	]
 
 	free-device*: func [

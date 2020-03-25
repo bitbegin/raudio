@@ -65,6 +65,13 @@ OS-audio: context [
 		null
 	]
 
+	all-devices: func [
+		count		[int-ptr!]				;-- number of devices
+		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
+	][
+		null
+	]
+
 	free-device: func [
 		dev			[AUDIO-DEVICE!]
 	][

@@ -33,12 +33,28 @@ OS-audio: context [
 	#define kAudioObjectPropertyScopeGlobal				"glob"
 	#define kAudioObjectPropertyElementMaster			0
 	#define kAudioDevicePropertyDeviceName				"name"
+	#define kAudioObjectPropertyScopeInput				"inpt"
+	#define kAudioDevicePropertyScopeInput				kAudioObjectPropertyScopeInput
+	#define kAudioObjectPropertyScopeOutput				"outp"
+	#define kAudioDevicePropertyScopeOutput				kAudioObjectPropertyScopeOutput
+	#define kAudioDevicePropertyStreamConfiguration		"slay"
 
 	#define AudioObjectID					integer!
 	#define AudioDeviceID					AudioObjectID
 	#define AudioObjectPropertySelector		integer!
 	#define AudioObjectPropertyScope		integer!
 	#define AudioObjectPropertyElement		integer!
+
+	AudioBuffer: alias struct! [
+		mNumberChannels		[integer!]
+		mDataByteSize		[integer!]
+		mData				[byte-ptr!]
+	]
+
+	AudioBufferList: alias struct! [
+		mNumberBuffers		[integer!]
+		mBuffers			[AudioBuffer value]
+	]
 
 	COREAUDIO-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
@@ -127,14 +143,59 @@ OS-audio: context [
 		ustr
 	]
 
+	device-type?: func [
+		id			[AudioDeviceID]
+		type		[AUDIO-DEVICE-TYPE!]
+		return:		[integer!]
+		/local
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			dsize	[integer!]
+			list	[AudioBufferList value]
+	][
+		addr/mSelector: cf-enum kAudioDevicePropertyStreamConfiguration
+		addr/mScope: cf-enum either type = ADEVICE-TYPE-OUTPUT [
+			kAudioDevicePropertyScopeOutput
+		][
+			kAudioDevicePropertyScopeInput
+		]
+		addr/mElement: kAudioObjectPropertyElementMaster
+		dsize: 0
+		hr: AudioObjectGetPropertyDataSize id addr 0 null :dsize
+		if hr <> 0 [return -1]
+		if dsize <> size? AudioBufferList [return -1]
+		hr: AudioObjectGetPropertyData id addr 0 null :dsize as int-ptr! list
+		if hr <> 0 [return -1]
+		if list/mNumberBuffers = 1 [return type]
+		-1
+	]
+
+	get-device-type: func [
+		id			[AudioDeviceID]
+		return:		[AUDIO-DEVICE-TYPE!]
+		/local
+			type	[integer!]
+			list	[AudioBufferList]
+	][
+		type: device-type? id ADEVICE-TYPE-INPUT
+		if type = ADEVICE-TYPE-INPUT [return ADEVICE-TYPE-INPUT]
+		type: device-type? id ADEVICE-TYPE-OUTPUT
+		if type = ADEVICE-TYPE-OUTPUT [return ADEVICE-TYPE-OUTPUT]
+		return -1
+	]
+
 	init-device: func [
 		dev			[COREAUDIO-DEVICE!]
 		id			[AudioDeviceID]
-		type		[AUDIO-DEVICE-TYPE!]
+		type		[integer!]
 	][
 		set-memory as byte-ptr! dev #"^(00)" size? COREAUDIO-DEVICE!
 		dev/id: id
-		dev/type: type
+		dev/type: either type = -1 [
+			get-device-type id
+		][
+			type
+		]
 		dev/name: get-device-name id
 		dev/running?: no
 	]
@@ -149,9 +210,9 @@ OS-audio: context [
 		print-line "================================"
 		print-line ["dev: " dev]
 		either cdev/type = ADEVICE-TYPE-OUTPUT [
-			print-line "    type: input"
+			print-line "    type: speaker"
 		][
-			print-line "    type: output"
+			print-line "    type: microphone"
 		]
 		print-line ["    id: " cdev/id]
 		print "    name: "
@@ -165,7 +226,6 @@ OS-audio: context [
 		/local
 			addr	[AudioObjectPropertyAddress value]
 			hr		[integer!]
-			size	[integer!]
 			id		[AudioDeviceID]
 			dsize	[integer!]
 			cdev	[COREAUDIO-DEVICE!]
@@ -177,7 +237,6 @@ OS-audio: context [
 		]
 		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
 		addr/mElement: kAudioObjectPropertyElementMaster
-		size: 0
 		id: 0
 		dsize: size? AudioDeviceID
 		hr: AudioObjectGetPropertyData kAudioObjectSystemObject addr 0 null :dsize :id
@@ -203,14 +262,141 @@ OS-audio: context [
 		count		[int-ptr!]				;-- number of input devices
 		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
 	][
-		null
+		get-devices 1 count
 	]
 
 	output-devices: func [
 		count		[int-ptr!]				;-- number of output devices
 		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
 	][
-		null
+		get-devices 0 count
+	]
+
+	get-devices*: func [
+		count		[int-ptr!]			;-- number of input devices
+		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
+		/local
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			dsize	[integer!]
+			ids		[int-ptr!]
+			ids2	[int-ptr!]
+			list	[int-ptr!]
+			end		[int-ptr!]
+			itor	[int-ptr!]
+			cdev	[COREAUDIO-DEVICE!]
+	][
+		count/1: 0
+		addr/mSelector: cf-enum kAudioHardwarePropertyDevices
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		dsize: 0
+		hr: AudioObjectGetPropertyDataSize kAudioObjectSystemObject addr 0 null :dsize
+		if hr <> 0 [return null]
+		count/1: dsize / size? AudioDeviceID
+		if count/1 = 0 [return null]
+		ids: as int-ptr! allocate dsize
+		ids2: ids
+		hr: AudioObjectGetPropertyData kAudioObjectSystemObject addr 0 null :dsize ids
+		if hr <> 0 [free as byte-ptr! ids return null]
+		list: as int-ptr! allocate count/1 + 1 * 4
+		itor: list
+		end: list + count/1
+		end/1: 0
+		loop count/1 [
+			either itor < end [
+				cdev: as COREAUDIO-DEVICE! allocate size? COREAUDIO-DEVICE!
+				init-device cdev ids2/1 -1
+				itor/1: as integer! cdev
+				itor: itor + 1
+				ids2: ids2 + 1
+			][
+				free as byte-ptr! ids
+				free as byte-ptr! list
+				return null
+			]
+		]
+		free as byte-ptr! ids
+		list
+	]
+
+	get-devices: func [
+		mode		[integer!]			;-- 0 for output, 1 for input, 2 for all
+		count		[int-ptr!]			;-- number of input devices
+		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
+		/local
+			num		[integer!]
+			list	[int-ptr!]
+			iter	[int-ptr!]
+			num2	[integer!]
+			cdev	[COREAUDIO-DEVICE!]
+			nlist	[int-ptr!]
+			niter	[int-ptr!]
+	][
+		num: 0
+		list: get-devices* :num
+		if num = 0 [return null]
+		iter: list
+		num2: 0
+		loop num [
+			cdev: as COREAUDIO-DEVICE! iter/1
+			if any [
+				all [
+					mode = 0
+					cdev/type = ADEVICE-TYPE-OUTPUT
+				]
+				all [
+					mode = 1
+					cdev/type = ADEVICE-TYPE-INPUT
+				]
+				all [
+					mode = 2
+					cdev/type <> -1
+				]
+			][
+				num2: num2 + 1
+			]
+			iter: iter + 1
+		]
+		if num2 = 0 [return null]
+		count/1: num2
+		nlist: as int-ptr! allocate num2 + 1 * 4
+		niter: nlist + num2
+		niter/1: 0
+		niter: nlist
+		iter: list
+		loop num [
+			cdev: as COREAUDIO-DEVICE! iter/1
+			either any [
+				all [
+					mode = 0
+					cdev/type = ADEVICE-TYPE-OUTPUT
+				]
+				all [
+					mode = 1
+					cdev/type = ADEVICE-TYPE-INPUT
+				]
+				all [
+					mode = 2
+					cdev/type <> -1
+				]
+			][
+				niter/1: iter/1
+				niter: niter + 1
+			][
+				free-device as int-ptr! cdev
+			]
+			iter: iter + 1
+		]
+		free as byte-ptr! list
+		nlist
+	]
+
+	all-devices: func [
+		count		[int-ptr!]			;-- number of input devices
+		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
+	][
+		get-devices 2 count
 	]
 
 	free-device: func [
@@ -221,15 +407,25 @@ OS-audio: context [
 		if null? dev [exit]
 		;-- stop dev
 		cdev: as COREAUDIO-DEVICE! dev
-		type-string/release wdev/name
+		type-string/release cdev/name
 		free as byte-ptr! cdev
 	]
 
 	free-devices: func [
 		devs		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
 		count		[integer!]				;-- number of devices
+		/local
+			p		[byte-ptr!]
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		0
+		if null? devs [exit]
+		p: as byte-ptr! devs
+		loop count [
+			cdev: as COREAUDIO-DEVICE! devs/1
+			free-device as AUDIO-DEVICE! devs/1
+			devs: devs + 1
+		]
+		free p
 	]
 
 	name: func [
