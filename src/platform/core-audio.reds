@@ -12,6 +12,7 @@ OS-audio: context [
 
 	dev-monitor: declare integer!
 
+
 	#import [
 		LIBC-file cdecl [
 			usleep: "usleep" [
@@ -25,15 +26,30 @@ OS-audio: context [
 		]
 	]
 
-	#define kAudioObjectSystemObject				1
-	#define kAudioHardwarePropertyDevices			"dev#"
-	#define kAudioObjectPropertyScopeGlobal			"glob"
-	#define kAudioObjectPropertyElementMaster		0
+	#define kAudioObjectSystemObject					1
+	#define kAudioHardwarePropertyDevices				"dev#"
+	#define kAudioHardwarePropertyDefaultInputDevice	"dIn "
+	#define kAudioHardwarePropertyDefaultOutputDevice	"dOut"
+	#define kAudioObjectPropertyScopeGlobal				"glob"
+	#define kAudioObjectPropertyElementMaster			0
+	#define kAudioDevicePropertyDeviceName				"name"
 
 	#define AudioObjectID					integer!
+	#define AudioDeviceID					AudioObjectID
 	#define AudioObjectPropertySelector		integer!
 	#define AudioObjectPropertyScope		integer!
 	#define AudioObjectPropertyElement		integer!
+
+	COREAUDIO-DEVICE!: alias struct! [
+		type			[AUDIO-DEVICE-TYPE!]
+		id				[AudioObjectID]
+		name			[unicode-string!]				;-- unicode format
+		sample-type		[AUDIO-SAMPLE-TYPE!]
+		io-cb			[int-ptr!]
+		stop-cb			[int-ptr!]
+		running?		[logic!]
+		buffer-size		[integer!]
+	]
 
 	AudioObjectPropertyAddress: alias struct! [
 		mSelector			[AudioObjectPropertySelector]
@@ -48,6 +64,15 @@ OS-audio: context [
 				inAddress				[AudioObjectPropertyAddress]
 				inQualifierDataSize		[integer!]
 				inQualifierData			[int-ptr!]
+				outData					[int-ptr!]
+				return:					[integer!]
+			]
+			AudioObjectGetPropertyData: "AudioObjectGetPropertyData" [
+				inObjectID				[AudioObjectID]
+				inAddress				[AudioObjectPropertyAddress]
+				inQualifierDataSize		[integer!]
+				inQualifierData			[int-ptr!]
+				ioDataSize				[int-ptr!]
 				outData					[int-ptr!]
 				return:					[integer!]
 			]
@@ -78,22 +103,100 @@ OS-audio: context [
 		0
 	]
 
+	get-device-name: func [
+		id			[AudioDeviceID]
+		return:		[unicode-string!]
+		/local
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			dsize	[integer!]
+			buff	[byte-ptr!]
+			ustr	[unicode-string!]
+	][
+		addr/mSelector: cf-enum kAudioDevicePropertyDeviceName
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		dsize: 0
+		hr: AudioObjectGetPropertyDataSize id addr 0 null :dsize
+		if hr <> 0 [return null]
+		buff: allocate dsize
+		hr: AudioObjectGetPropertyData id addr 0 null :dsize as int-ptr! buff
+		if hr <> 0 [free buff return null]
+		ustr: type-string/load-utf8 buff
+		free buff
+		ustr
+	]
+
+	init-device: func [
+		dev			[COREAUDIO-DEVICE!]
+		id			[AudioDeviceID]
+		type		[AUDIO-DEVICE-TYPE!]
+	][
+		set-memory as byte-ptr! dev #"^(00)" size? COREAUDIO-DEVICE!
+		dev/id: id
+		dev/type: type
+		dev/name: get-device-name id
+		dev/running?: no
+	]
+
 	dump-device: func [
 		dev			[AUDIO-DEVICE!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		0
+		if null? dev [print-line "null device!" exit]
+		cdev: as COREAUDIO-DEVICE! dev
+		print-line "================================"
+		print-line ["dev: " dev]
+		either cdev/type = ADEVICE-TYPE-OUTPUT [
+			print-line "    type: input"
+		][
+			print-line "    type: output"
+		]
+		print-line ["    id: " cdev/id]
+		print "    name: "
+		type-string/uprint cdev/name
+		print-line "^/================================"
+	]
+
+	default-device: func [
+		type		[AUDIO-DEVICE-TYPE!]
+		return:		[AUDIO-DEVICE!]
+		/local
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			size	[integer!]
+			id		[AudioDeviceID]
+			dsize	[integer!]
+			cdev	[COREAUDIO-DEVICE!]
+	][
+		addr/mSelector: cf-enum either type = ADEVICE-TYPE-OUTPUT [
+			kAudioHardwarePropertyDefaultOutputDevice
+		][
+			kAudioHardwarePropertyDefaultInputDevice
+		]
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		size: 0
+		id: 0
+		dsize: size? AudioDeviceID
+		hr: AudioObjectGetPropertyData kAudioObjectSystemObject addr 0 null :dsize :id
+		if hr <> 0 [return null]
+		cdev: as COREAUDIO-DEVICE! allocate size? COREAUDIO-DEVICE!
+		init-device cdev id type
+		as AUDIO-DEVICE! cdev
 	]
 
 	default-input-device: func [
 		return: [AUDIO-DEVICE!]
 	][
-		null
+		default-device ADEVICE-TYPE-INPUT
 	]
 
 	default-output-device: func [
 		return: [AUDIO-DEVICE!]
 	][
-		null
+		default-device ADEVICE-TYPE-OUTPUT
 	]
 
 	input-devices: func [
@@ -112,8 +215,14 @@ OS-audio: context [
 
 	free-device: func [
 		dev			[AUDIO-DEVICE!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		0
+		if null? dev [exit]
+		;-- stop dev
+		cdev: as COREAUDIO-DEVICE! dev
+		type-string/release wdev/name
+		free as byte-ptr! cdev
 	]
 
 	free-devices: func [
