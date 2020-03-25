@@ -25,6 +25,51 @@ OS-audio: context [
 		]
 	]
 
+	#define kAudioObjectSystemObject				1
+	#define kAudioHardwarePropertyDevices			"dev#"
+	#define kAudioObjectPropertyScopeGlobal			"glob"
+	#define kAudioObjectPropertyElementMaster		0
+
+	#define AudioObjectID					integer!
+	#define AudioObjectPropertySelector		integer!
+	#define AudioObjectPropertyScope		integer!
+	#define AudioObjectPropertyElement		integer!
+
+	AudioObjectPropertyAddress: alias struct! [
+		mSelector			[AudioObjectPropertySelector]
+		mScope				[AudioObjectPropertyScope]
+		mElement			[AudioObjectPropertyElement]
+	]
+
+	#import [
+		"/System/Library/Frameworks/CoreAudio.framework/CoreAudio" cdecl [
+			AudioObjectGetPropertyDataSize: "AudioObjectGetPropertyDataSize" [
+				inObjectID				[AudioObjectID]
+				inAddress				[AudioObjectPropertyAddress]
+				inQualifierDataSize		[integer!]
+				inQualifierData			[int-ptr!]
+				outData					[int-ptr!]
+				return:					[integer!]
+			]
+		]
+	]
+
+	cf-enum: func [
+		str			[c-string!]
+		return:		[integer!]
+		/local
+			ret		[integer!]
+			pb		[byte-ptr!]
+	][
+		ret: 0
+		pb: as byte-ptr! :ret
+		pb/1: str/4
+		pb/2: str/3
+		pb/3: str/2
+		pb/4: str/1
+		ret
+	]
+
 	init: does [
 		dev-monitor: 0
 	]
