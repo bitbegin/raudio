@@ -23,8 +23,8 @@ wave-cb: func [
 		buf			[int-ptr!]
 		p			[int-ptr!]
 ][
-	if null? io/output-buffer [exit]
-	out: io/output-buffer
+	if null? io/buffer [exit]
+	out: io/buffer
 	frame: 0
 	ch: as int-ptr! out/channels
 	loop out/frames-count [

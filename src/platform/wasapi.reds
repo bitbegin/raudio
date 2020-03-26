@@ -815,13 +815,13 @@ OS-audio: context [
 			if data = 0 [exit]
 			pcb: as AUDIO-IO-CALLBACK! io-cb
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
-			abuff/output-buffer/sample-type: wdev/sample-type
-			abuff/output-buffer/frames-count: num
+			abuff/buffer/sample-type: wdev/sample-type
+			abuff/buffer/frames-count: num
 			temp: wdev/mix-format/TagChannels >>> 16
-			abuff/output-buffer/channels-count: temp
-			abuff/output-buffer/stride: temp
-			abuff/output-buffer/contiguous?: yes
-			chs: as int-ptr! abuff/output-buffer/channels
+			abuff/buffer/channels-count: temp
+			abuff/buffer/stride: temp
+			abuff/buffer/contiguous?: yes
+			chs: as int-ptr! abuff/buffer/channels
 			size: either wdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
 			step: data
 			loop temp [
@@ -845,13 +845,13 @@ OS-audio: context [
 			if data = 0 [exit]
 			pcb: as AUDIO-IO-CALLBACK! io-cb
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
-			abuff/input-buffer/sample-type: wdev/sample-type
-			abuff/input-buffer/frames-count: next-size
+			abuff/buffer/sample-type: wdev/sample-type
+			abuff/buffer/frames-count: next-size
 			temp: wdev/mix-format/TagChannels >>> 16
-			abuff/input-buffer/channels-count: temp
-			abuff/input-buffer/stride: temp
-			abuff/input-buffer/contiguous?: yes
-			chs: as int-ptr! abuff/input-buffer/channels
+			abuff/buffer/channels-count: temp
+			abuff/buffer/stride: temp
+			abuff/buffer/contiguous?: yes
+			chs: as int-ptr! abuff/buffer/channels
 			size: either wdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
 			step: data
 			loop temp [

@@ -16,8 +16,8 @@ record-cb: func [
 		buf			[int-ptr!]
 		p			[int-ptr!]
 ][
-	if null? io/input-buffer [exit]
-	in*: io/input-buffer
+	if null? io/buffer [exit]
+	in*: io/buffer
 	frame: 0
 	ch: as int-ptr! in*/channels
 	loop in*/frames-count [

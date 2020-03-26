@@ -50,10 +50,8 @@ AUDIO-BUFFER!: alias struct! [
 ]
 
 AUDIO-DEVICE-IO!: alias struct! [
-	input-buffer	[AUDIO-BUFFER! value]
-	input-time		[AUDIO-CLOCK!]
-	output-buffer	[AUDIO-BUFFER! value]
-	output-time		[AUDIO-CLOCK!]
+	buffer			[AUDIO-BUFFER! value]
+	time			[AUDIO-CLOCK!]
 ]
 
 AUDIO-IO-CALLBACK!: alias function! [
