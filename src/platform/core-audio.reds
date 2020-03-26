@@ -38,6 +38,7 @@ OS-audio: context [
 	#define kAudioObjectPropertyScopeOutput				"outp"
 	#define kAudioDevicePropertyScopeOutput				kAudioObjectPropertyScopeOutput
 	#define kAudioDevicePropertyStreamConfiguration		"slay"
+	#define kAudioDevicePropertyNominalSampleRate		"nsrt"
 
 	#define AudioObjectID					integer!
 	#define AudioDeviceID					AudioObjectID
@@ -235,7 +236,9 @@ OS-audio: context [
 		print-line ["    id: " cdev/id]
 		print "    name: "
 		type-string/uprint cdev/name
-		print-line "^/================================"
+		print-line ["^/    channels: " cdev/buff-list/mBuffers/mNumberChannels]
+		print-line ["    sample rate: " sample-rate dev]
+		print-line "================================"
 	]
 
 	default-device: func [
@@ -494,8 +497,24 @@ OS-audio: context [
 	sample-rate: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			dsize	[integer!]
+			rate	[float!]
 	][
-		0
+		cdev: as COREAUDIO-DEVICE! dev
+		addr/mSelector: cf-enum kAudioDevicePropertyNominalSampleRate
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		dsize: 0
+		hr: AudioObjectGetPropertyDataSize cdev/id addr 0 null :dsize
+		if hr <> 0 [return 0]
+		rate: 0.0
+		hr: AudioObjectGetPropertyData cdev/id addr 0 null :dsize as int-ptr! :rate
+		if hr <> 0 [return 0]
+		as integer! rate
 	]
 
 	set-sample-rate: func [
