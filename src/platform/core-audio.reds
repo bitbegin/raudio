@@ -10,8 +10,16 @@ AUDIO-CLOCK!: alias struct! [
 
 OS-audio: context [
 
-	dev-monitor: declare integer!
-
+	DEVICE-MONITOR-NOTIFY!: alias struct! [
+		list-notify		[int-ptr!]
+		input-notify	[int-ptr!]
+		output-notify	[int-ptr!]
+	]
+	DEVICE-MONITOR!: alias struct! [
+		enable?		[integer!]
+		notifys		[DEVICE-MONITOR-NOTIFY! value]
+	]
+	dev-monitor: declare DEVICE-MONITOR!
 
 	#import [
 		LIBC-file cdecl [
@@ -127,6 +135,20 @@ OS-audio: context [
 				inProcID				[int-ptr!]
 				return:					[integer!]
 			]
+			AudioObjectAddPropertyListener: "AudioObjectAddPropertyListener" [
+				inObjectID				[AudioObjectID]
+				inAddress				[AudioObjectPropertyAddress]
+				inListener				[int-ptr!]
+				inClientData			[int-ptr!]
+				return:					[integer!]
+			]
+			AudioObjectRemovePropertyListener: "AudioObjectRemovePropertyListener" [
+				inObjectID				[AudioObjectID]
+				inAddress				[AudioObjectPropertyAddress]
+				inListener				[int-ptr!]
+				inClientData			[int-ptr!]
+				return:					[integer!]
+			]
 		]
 	]
 
@@ -147,7 +169,7 @@ OS-audio: context [
 	]
 
 	init: does [
-		dev-monitor: 0
+		set-memory as byte-ptr! dev-monitor #"^(00)" size? DEVICE-MONITOR!
 	]
 
 	close: does [
@@ -805,24 +827,106 @@ OS-audio: context [
 
 	init-monitor: func [
 	][
-		0
+		if dev-monitor/enable? = 0 [
+			dev-monitor/enable?: 1
+		]
 	]
 
 	free-monitor: func [
 	][
+		set-memory as byte-ptr! dev-monitor #"^(00)" size? DEVICE-MONITOR!
+	]
+
+	monitor-cb: func [
+		[cdecl]
+		id				[AudioObjectID]
+		NumAddr			[integer!]
+		addr			[AudioObjectPropertyAddress]
+		ptr-to-this		[int-ptr!]
+		return:			[integer!]
+		/local
+			notifys		[int-ptr!]
+			d-cb		[AUDIO-CHANGED-CALLBACK!]
+	][
+		notifys: as int-ptr! dev-monitor/notifys
+		case [
+			addr/mSelector = cf-enum kAudioHardwarePropertyDevices [
+				d-cb: as AUDIO-CHANGED-CALLBACK! notifys/1
+			]
+			addr/mSelector = cf-enum kAudioHardwarePropertyDefaultInputDevice [
+				d-cb: as AUDIO-CHANGED-CALLBACK! notifys/2
+			]
+			addr/mSelector = cf-enum kAudioHardwarePropertyDefaultOutputDevice [
+				d-cb: as AUDIO-CHANGED-CALLBACK! notifys/3
+			]
+			true [
+				return 0
+			]
+		]
+		d-cb
 		0
 	]
 
 	set-device-changed-callback: func [
 		event			[AUDIO-DEVICE-EVENT!]
 		cb				[int-ptr!]				;-- audio-changed-callback!
+		/local
+			addr		[AudioObjectPropertyAddress value]
+			hr			[integer!]
+			notifys		[int-ptr!]
 	][
-		0
+		init-monitor
+		addr/mSelector: cf-enum case [
+			event = ADEVICE-LIST-CHANGED [
+				kAudioHardwarePropertyDevices
+			]
+			event = DEFAULT-INPUT-CHANGED [
+				kAudioHardwarePropertyDefaultInputDevice
+			]
+			event = DEFAULT-OUTPUT-CHANGED [
+				kAudioHardwarePropertyDefaultOutputDevice
+			]
+		]
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		hr: AudioObjectAddPropertyListener kAudioObjectSystemObject addr as int-ptr! :monitor-cb as int-ptr! dev-monitor
+		notifys: as int-ptr! dev-monitor/notifys
+		notifys: notifys + event
+		if notifys/1 <> 0 [
+			hr: AudioObjectRemovePropertyListener kAudioObjectSystemObject addr as int-ptr! :monitor-cb as int-ptr! dev-monitor
+		]
+		notifys/1: as integer! cb
 	]
 
 	free-device-changed-callback: func [
+		/local
+			notifys		[int-ptr!]
+			i			[integer!]
+			addr		[AudioObjectPropertyAddress value]
+			hr			[integer!]
 	][
-		0
+		notifys: as int-ptr! dev-monitor/notifys
+		i: 0
+		loop 3 [
+			if notifys/1 <> 0 [
+				addr/mSelector: cf-enum case [
+					i = 0 [
+						kAudioHardwarePropertyDevices
+					]
+					i = 1 [
+						kAudioHardwarePropertyDefaultInputDevice
+					]
+					i = 2 [
+						kAudioHardwarePropertyDefaultOutputDevice
+					]
+				]
+				i: i + 1
+				addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+				addr/mElement: kAudioObjectPropertyElementMaster
+				hr: AudioObjectRemovePropertyListener kAudioObjectSystemObject addr as int-ptr! :monitor-cb as int-ptr! dev-monitor
+			]
+			notifys: notifys + 1
+		]
 		free-monitor
 	]
 ]
