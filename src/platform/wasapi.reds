@@ -358,7 +358,9 @@ OS-audio: context [
 		type-string/uprint wdev/id
 		print "^/    name: "
 		type-string/uprint wdev/name
-		print-line "^/================================"
+		print-line ["^/    channels: " wdev/mix-format/TagChannels >>> 16]
+		print-line ["    sample rate: " wdev/mix-format/SamplesPerSec]
+		print-line "================================"
 	]
 
 	default-device: func [
