@@ -580,22 +580,31 @@ OS-audio: context [
 	input?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		false
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/type = ADEVICE-TYPE-INPUT
 	]
 
 	output?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		false
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/type = ADEVICE-TYPE-OUTPUT
 	]
 
 	running?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		no
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/running?
 	]
 
 	has-unprocessed-io?: func [
