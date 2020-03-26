@@ -94,6 +94,15 @@ OS-audio: context [
 				outData					[int-ptr!]
 				return:					[integer!]
 			]
+			AudioObjectSetPropertyData: "AudioObjectSetPropertyData" [
+				inObjectID				[AudioObjectID]
+				inAddress				[AudioObjectPropertyAddress]
+				inQualifierDataSize		[integer!]
+				inQualifierData			[int-ptr!]
+				ioDataSize				[integer!]
+				inData					[int-ptr!]
+				return:					[integer!]
+			]
 		]
 	]
 
@@ -521,7 +530,20 @@ OS-audio: context [
 		dev			[AUDIO-DEVICE!]
 		rate		[integer!]
 		return:		[logic!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			dsize	[integer!]
+			frate	[float!]
 	][
+		cdev: as COREAUDIO-DEVICE! dev
+		addr/mSelector: cf-enum kAudioDevicePropertyNominalSampleRate
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		frate: as float! rate
+		hr: AudioObjectSetPropertyData cdev/id addr 0 null size? float! as int-ptr! :frate
+		if hr <> 0 [return false]
 		true
 	]
 
