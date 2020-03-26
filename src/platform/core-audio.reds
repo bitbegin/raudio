@@ -618,8 +618,13 @@ OS-audio: context [
 		dev			[AUDIO-DEVICE!]
 		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		0
+		cdev: as COREAUDIO-DEVICE! dev
+		if cdev/running? [exit]
+		cdev/sample-type: stype
+		cdev/io-cb: io-cb
 	]
 
 	start: func [
