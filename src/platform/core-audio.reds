@@ -61,6 +61,7 @@ OS-audio: context [
 		id				[AudioObjectID]
 		name			[unicode-string!]				;-- unicode format
 		sample-type		[AUDIO-SAMPLE-TYPE!]
+		buff-list		[AudioBufferList value]
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
@@ -143,15 +144,15 @@ OS-audio: context [
 		ustr
 	]
 
-	device-type?: func [
+	get-buffer-list: func [
 		id			[AudioDeviceID]
 		type		[AUDIO-DEVICE-TYPE!]
-		return:		[integer!]
+		buff-list	[AudioBufferList]
+		return:		[logic!]
 		/local
 			addr	[AudioObjectPropertyAddress value]
 			hr		[integer!]
 			dsize	[integer!]
-			list	[AudioBufferList value]
 	][
 		addr/mSelector: cf-enum kAudioDevicePropertyStreamConfiguration
 		addr/mScope: cf-enum either type = ADEVICE-TYPE-OUTPUT [
@@ -162,10 +163,21 @@ OS-audio: context [
 		addr/mElement: kAudioObjectPropertyElementMaster
 		dsize: 0
 		hr: AudioObjectGetPropertyDataSize id addr 0 null :dsize
-		if hr <> 0 [return -1]
-		if dsize <> size? AudioBufferList [return -1]
-		hr: AudioObjectGetPropertyData id addr 0 null :dsize as int-ptr! list
-		if hr <> 0 [return -1]
+		if hr <> 0 [return false]
+		if dsize <> size? AudioBufferList [return false]
+		hr: AudioObjectGetPropertyData id addr 0 null :dsize as int-ptr! buff-list
+		if hr <> 0 [return false]
+		true
+	]
+
+	device-type?: func [
+		id			[AudioDeviceID]
+		type		[AUDIO-DEVICE-TYPE!]
+		return:		[integer!]
+		/local
+			list	[AudioBufferList value]
+	][
+		unless get-buffer-list id type list [return -1]
 		if list/mNumberBuffers = 1 [return type]
 		-1
 	]
@@ -195,6 +207,12 @@ OS-audio: context [
 			get-device-type id
 		][
 			type
+		]
+		if any [
+			dev/type = ADEVICE-TYPE-INPUT
+			dev/type = ADEVICE-TYPE-OUTPUT
+		][
+			get-buffer-list id dev/type dev/buff-list
 		]
 		dev/name: get-device-name id
 		dev/running?: no
@@ -431,22 +449,31 @@ OS-audio: context [
 	name: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[unicode-string!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		null
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/name
 	]
 
 	id: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[int-ptr!]
+		return:		[integer!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		null
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/id
 	]
 
 	channels-count: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		0
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/buff-list/mBuffers/mNumberChannels
 	]
 
 	buffer-size: func [
