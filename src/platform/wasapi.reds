@@ -360,6 +360,7 @@ OS-audio: context [
 		type-string/uprint wdev/name
 		print-line ["^/    channels: " wdev/mix-format/TagChannels >>> 16]
 		print-line ["    sample rate: " wdev/mix-format/SamplesPerSec]
+		print-line ["    buffer frames: " wdev/buffer-size]
 		print-line "================================"
 	]
 

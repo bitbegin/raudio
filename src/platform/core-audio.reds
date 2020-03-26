@@ -39,6 +39,7 @@ OS-audio: context [
 	#define kAudioDevicePropertyScopeOutput				kAudioObjectPropertyScopeOutput
 	#define kAudioDevicePropertyStreamConfiguration		"slay"
 	#define kAudioDevicePropertyNominalSampleRate		"nsrt"
+	#define kAudioDevicePropertyBufferFrameSize			"fsiz"
 
 	#define AudioObjectID					integer!
 	#define AudioDeviceID					AudioObjectID
@@ -247,6 +248,7 @@ OS-audio: context [
 		type-string/uprint cdev/name
 		print-line ["^/    channels: " cdev/buff-list/mBuffers/mNumberChannels]
 		print-line ["    sample rate: " sample-rate dev]
+		print-line ["    buffer frames: " buffer-size dev]
 		print-line "================================"
 	]
 
@@ -491,15 +493,44 @@ OS-audio: context [
 	buffer-size: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			dsize	[integer!]
+			frames	[integer!]
 	][
-		0
+		cdev: as COREAUDIO-DEVICE! dev
+		addr/mSelector: cf-enum kAudioDevicePropertyBufferFrameSize
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		dsize: 0
+		hr: AudioObjectGetPropertyDataSize cdev/id addr 0 null :dsize
+		if hr <> 0 [return 0]
+		if dsize <> 4 [return 0]
+		frames: 0
+		hr: AudioObjectGetPropertyData cdev/id addr 0 null :dsize :frames
+		if hr <> 0 [return 0]
+		frames
 	]
 
 	set-buffer-size: func [
 		dev			[AUDIO-DEVICE!]
 		count		[integer!]
 		return:		[logic!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			frames	[integer!]
 	][
+		cdev: as COREAUDIO-DEVICE! dev
+		addr/mSelector: cf-enum kAudioDevicePropertyBufferFrameSize
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		frames: count
+		hr: AudioObjectSetPropertyData cdev/id addr 0 null size? integer! :frames
+		if hr <> 0 [return false]
 		true
 	]
 
@@ -534,7 +565,6 @@ OS-audio: context [
 			cdev	[COREAUDIO-DEVICE!]
 			addr	[AudioObjectPropertyAddress value]
 			hr		[integer!]
-			dsize	[integer!]
 			frate	[float!]
 	][
 		cdev: as COREAUDIO-DEVICE! dev
