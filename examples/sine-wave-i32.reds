@@ -48,9 +48,10 @@ dev: audio/default-output-device
 audio/dump-device dev
 rate: as float! audio-device/sample-rate dev
 delta: freq * pi / rate
-audio-device/connect dev ASAMPLE-TYPE-I32 as int-ptr! :wave-cb
-audio-device/start dev null null
-sleep 5 * 1000
+if audio-device/connect dev ASAMPLE-TYPE-I32 as int-ptr! :wave-cb [
+	audio-device/start dev null null
+	sleep 5 * 1000
+]
 
 audio/free-device dev
 

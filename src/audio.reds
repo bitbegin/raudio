@@ -231,6 +231,7 @@ audio-device: context [
 		dev			[AUDIO-DEVICE!]
 		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]				;-- audio-io-callback!
+		return:		[logic!]
 	][
 		OS-audio/connect dev stype io-cb
 	]

@@ -747,13 +747,14 @@ OS-audio: context [
 		dev			[AUDIO-DEVICE!]
 		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
+		return:		[logic!]
 		/local
 			wdev	[WASAPI-DEVICE!]
 			format	[WAVEFORMATEXTENSIBLE!]
 			bits	[integer!]
 	][
 		wdev: as WASAPI-DEVICE! dev
-		if wdev/running? [exit]
+		if wdev/running? [return false]
 		format: wdev/mix-format
 		wdev/sample-type: stype
 		case [
@@ -778,6 +779,7 @@ OS-audio: context [
 		format/AlignBits: format/AlignBits + (bits << 16)
 		fixup-mix-format format
 		wdev/io-cb: io-cb
+		true
 	]
 
 	process: func [

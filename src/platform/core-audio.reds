@@ -641,13 +641,16 @@ OS-audio: context [
 		dev			[AUDIO-DEVICE!]
 		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
+		return:		[logic!]
 		/local
 			cdev	[COREAUDIO-DEVICE!]
 	][
+		if stype <> ASAMPLE-TYPE-F32 [return false]
 		cdev: as COREAUDIO-DEVICE! dev
-		if cdev/running? [exit]
-		cdev/sample-type: stype
+		if cdev/running? [return false]
+		cdev/sample-type: ASAMPLE-TYPE-F32
 		cdev/io-cb: io-cb
+		true
 	]
 
 	_device-callback: func [
