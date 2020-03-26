@@ -32,10 +32,16 @@ input-cb: does [
 	print-all-device
 ]
 
+output-cb: does [
+	print-line "default output changed callback!"
+	print-all-device
+]
+
 print-all-device
 
 audio/set-device-changed-callback ADEVICE-LIST-CHANGED as int-ptr! :list-cb
 audio/set-device-changed-callback DEFAULT-INPUT-CHANGED as int-ptr! :input-cb
+audio/set-device-changed-callback DEFAULT-OUTPUT-CHANGED as int-ptr! :output-cb
 
 sleep 50 * 1000
 
