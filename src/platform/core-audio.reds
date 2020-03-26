@@ -68,6 +68,7 @@ OS-audio: context [
 		stop-cb			[int-ptr!]
 		running?		[logic!]
 		buffer-size		[integer!]
+		proc-id			[integer!]
 	]
 
 	AudioObjectPropertyAddress: alias struct! [
@@ -102,6 +103,28 @@ OS-audio: context [
 				inQualifierData			[int-ptr!]
 				ioDataSize				[integer!]
 				inData					[int-ptr!]
+				return:					[integer!]
+			]
+			AudioDeviceCreateIOProcID: "AudioDeviceCreateIOProcID" [
+				inDevice				[AudioObjectID]
+				inProc					[int-ptr!]
+				inClientData			[int-ptr!]
+				outIOProcID				[int-ptr!]
+				return:					[integer!]
+			]
+			AudioDeviceStart: "AudioDeviceStart" [
+				inDevice				[AudioObjectID]
+				inProcID				[int-ptr!]
+				return:					[integer!]
+			]
+			AudioDeviceDestroyIOProcID: "AudioDeviceDestroyIOProcID" [
+				inDevice				[AudioObjectID]
+				inProcID				[integer!]
+				return:					[integer!]
+			]
+			AudioDeviceStop: "AudioDeviceStop" [
+				inDevice				[AudioObjectID]
+				inProcID				[int-ptr!]
 				return:					[integer!]
 			]
 		]
@@ -627,19 +650,130 @@ OS-audio: context [
 		cdev/io-cb: io-cb
 	]
 
+	_device-callback: func [
+		[cdecl]
+		id			[AudioObjectID]
+		now			[int-ptr!]
+		input_data	[AudioBufferList]
+		input_time	[int-ptr!]
+		output_data	[AudioBufferList]
+		output_time	[int-ptr!]
+		ptr-to-this	[int-ptr!]
+		return:		[integer!]
+		/local
+			cdev		[COREAUDIO-DEVICE!]
+			abuff		[AUDIO-DEVICE-IO! value]
+			pcb			[AUDIO-IO-CALLBACK!]
+			ch-count	[integer!]
+			bytes		[integer!]
+			size		[integer!]
+			chs			[int-ptr!]
+			step		[integer!]
+	][
+		if null? ptr-to-this [return -1]
+		cdev: as COREAUDIO-DEVICE! ptr-to-this
+		if cdev/type = ADEVICE-TYPE-OUTPUT [
+			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
+			if output_data/mNumberBuffers <> 1 [return 1]
+			abuff/buffer/sample-type: cdev/sample-type
+			ch-count: output_data/mBuffers/mNumberChannels
+			bytes: output_data/mBuffers/mDataByteSize
+			size: either cdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			abuff/buffer/channels-count: ch-count
+			abuff/buffer/frames-count: bytes / size / ch-count
+			abuff/buffer/stride: ch-count
+			abuff/buffer/contiguous?: yes
+			chs: as int-ptr! abuff/buffer/channels
+			step: as integer! output_data/mBuffers/mData
+			loop ch-count [
+				chs/1: step
+				chs: chs + 1
+				step: step + size
+			]
+			pcb: as AUDIO-IO-CALLBACK! cdev/io-cb
+			pcb ptr-to-this abuff
+			return 0
+		]
+		if cdev/type = ADEVICE-TYPE-INPUT [
+			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
+			if input_data/mNumberBuffers <> 1 [return 1]
+			abuff/buffer/sample-type: cdev/sample-type
+			ch-count: input_data/mBuffers/mNumberChannels
+			bytes: input_data/mBuffers/mDataByteSize
+			size: either cdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			abuff/buffer/channels-count: ch-count
+			abuff/buffer/frames-count: bytes / size / ch-count
+			abuff/buffer/stride: ch-count
+			abuff/buffer/contiguous?: yes
+			chs: as int-ptr! abuff/buffer/channels
+			step: as integer! input_data/mBuffers/mData
+			loop ch-count [
+				chs/1: step
+				chs: chs + 1
+				step: step + size
+			]
+			pcb: as AUDIO-IO-CALLBACK! cdev/io-cb
+			pcb ptr-to-this abuff
+			return 0
+		]
+		0
+	]
+
 	start: func [
 		dev			[audio-device!]
 		start-cb	[int-ptr!]				;-- audio-device-callback!
 		stop-cb		[int-ptr!]				;-- audio-device-callback!
 		return:		[logic!]
+		/local
+			cdev		[COREAUDIO-DEVICE!]
+			hr			[integer!]
+			start_cb	[AUDIO-DEVICE-CALLBACK!]
 	][
-		yes
+		cdev: as COREAUDIO-DEVICE! dev
+		if cdev/running? [return true]
+		unless null? cdev/io-cb [
+			hr: AudioDeviceCreateIOProcID cdev/id as int-ptr! :_device-callback dev :cdev/proc-id
+			if hr <> 0 [
+				return false
+			]
+			hr: AudioDeviceStart cdev/id as int-ptr! :_device-callback
+			if hr <> 0 [
+				AudioDeviceDestroyIOProcID cdev/id cdev/proc-id
+				cdev/proc-id: 0
+				return false
+			]
+		]
+		cdev/running?: yes
+
+		unless null? start-cb [
+			start_cb: as AUDIO-DEVICE-CALLBACK! start-cb
+			start_cb dev
+		]
+		cdev/stop-cb: stop-cb
+		true
 	]
 
 	stop: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+			hr		[integer!]
+			stop_cb	[AUDIO-DEVICE-CALLBACK!]
 	][
+		cdev: as COREAUDIO-DEVICE! dev
+		if cdev/running? [
+			hr: AudioDeviceStop cdev/id as int-ptr! :_device-callback
+			if hr <> 0 [return false]
+			hr: AudioDeviceDestroyIOProcID cdev/id cdev/proc-id
+			if hr <> 0 [return false]
+			unless null? cdev/stop-cb [
+				stop_cb: as AUDIO-DEVICE-CALLBACK! cdev/stop-cb
+				stop_cb dev
+			]
+			cdev/proc-id: 0
+			cdev/running?: no
+		]
 		true
 	]
 
