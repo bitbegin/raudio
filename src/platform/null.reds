@@ -168,8 +168,9 @@ OS-audio: context [
 		dev			[AUDIO-DEVICE!]
 		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
+		return:		[logic!]
 	][
-		0
+		true
 	]
 
 	start: func [
