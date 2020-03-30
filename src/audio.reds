@@ -68,7 +68,7 @@ AUDIO-CHANGED-CALLBACK!: alias function! []
 #switch OS [
 	Windows  [#include %platform/wasapi.reds]
 	macOS	 [#include %platform/core-audio.reds]
-	Linux	 [#include %platform/pulse-audio.reds]
+	Linux	 [#include %platform/alsa.reds]
 	FreeBSD  [#include %platform/pulse-audio.reds]
 	Syllable [#include %platform/null.reds]
 	#default [#include %platform/null.reds]
