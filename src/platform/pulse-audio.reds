@@ -23,10 +23,32 @@ OS-audio: context [
 				return:		[integer!]
 			]
 		]
+		"libpulse.so.0" cdecl [
+			pa_threaded_mainloop_new: "pa_threaded_mainloop_new" [
+				return:		[int-ptr!]
+			]
+			pa_threaded_mainloop_get_api: "pa_threaded_mainloop_get_api" [
+				m			[int-ptr!]
+				return:		[int-ptr!]
+			]
+			pa_stream_new: "pa_stream_new" [
+				c			[int-ptr!]
+				name		[c-string!]
+				ss			[int-ptr!]
+				map			[int-ptr!]
+				return:		[int-ptr!]
+			]
+		]
 	]
+
+	mm: as int-ptr! 0
+	tt: as int-ptr! 0
 
 	init: does [
 		dev-monitor: 0
+		mm: pa_threaded_mainloop_new
+		tt: pa_threaded_mainloop_get_api mm
+		print-line [mm " " tt]
 	]
 
 	close: does [
