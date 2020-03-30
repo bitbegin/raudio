@@ -25,8 +25,56 @@ OS-audio: context [
 		]
 	]
 
-	init: does [
+	#import [
+		"libasound.so.2" cdecl [
+			snd_pcm_type_name: "snd_pcm_type_name" [
+				type		[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_stream_name: "snd_pcm_stream_name" [
+				stream		[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_access_name: "snd_pcm_access_name" [
+				access		[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_format_name: "snd_pcm_format_name" [
+				format		[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_format_description: "snd_pcm_format_description" [
+				format		[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_subformat_name: "snd_pcm_subformat_name" [
+				subformat	[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_subformat_description: "snd_pcm_subformat_description" [
+				subformat	[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_format_value: "snd_pcm_format_value" [
+				name		[c-string!]
+				return:		[integer!]
+			]
+			snd_pcm_tstamp_mode_name: "snd_pcm_tstamp_mode_name" [
+				mode		[integer!]
+				return:		[c-string!]
+			]
+			snd_pcm_state_name: "snd_pcm_state_name" [
+				state		[integer!]
+				return:		[c-string!]
+			]
+		]
+	]
+
+	init: func [
+		return:		[logic!]
+	][
 		dev-monitor: 0
+		true
 	]
 
 	close: does [

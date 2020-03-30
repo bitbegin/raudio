@@ -168,8 +168,9 @@ OS-audio: context [
 		ret
 	]
 
-	init: does [
+	init: func [return: [logic!]] [
 		set-memory as byte-ptr! dev-monitor #"^(00)" size? DEVICE-MONITOR!
+		true
 	]
 
 	close: does [

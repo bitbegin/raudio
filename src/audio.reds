@@ -75,7 +75,7 @@ AUDIO-CHANGED-CALLBACK!: alias function! []
 ]
 
 audio: context [
-	init: does [
+	init: func [return: [logic!]] [
 		OS-audio/init
 	]
 	close: does [

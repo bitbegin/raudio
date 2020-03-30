@@ -25,8 +25,9 @@ OS-audio: context [
 		]
 	]
 
-	init: does [
+	init: func [return: [logic!]] [
 		dev-monitor: 0
+		true
 	]
 
 	close: does [

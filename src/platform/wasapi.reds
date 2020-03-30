@@ -233,9 +233,10 @@ OS-audio: context [
 		OnPropertyValueChanged		[function! [this [this!] id [int-ptr!] key [PROPERTYKEY! value] return: [integer!]]]
 	]
 
-	init: does [
+	init: func [return: [logic!]] [
 		set-memory as byte-ptr! dev-monitor #"^(00)" size? DEVICE-MONITOR!
 		;CoInitializeEx 0 COINIT_APARTMENTTHREADED
+		true
 	]
 
 	close: does [
