@@ -69,6 +69,7 @@ OS-audio: context [
 	COREAUDIO-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
 		id				[AudioObjectID]
+		id-str			[unicode-string!]
 		name			[unicode-string!]				;-- unicode format
 		sample-type		[AUDIO-SAMPLE-TYPE!]
 		buff-list		[AudioBufferList value]
@@ -257,9 +258,14 @@ OS-audio: context [
 		dev			[COREAUDIO-DEVICE!]
 		id			[AudioDeviceID]
 		type		[integer!]
+		/local
+			buff	[byte-ptr!]
 	][
 		set-memory as byte-ptr! dev #"^(00)" size? COREAUDIO-DEVICE!
+		buff: as byte-ptr! system/stack/allocate 4
+		sprintf [buff "%04X" id]
 		dev/id: id
+		dev/id-str: type-string/load-utf8 buff
 		dev/type: either type = -1 [
 			get-device-type id
 		][
@@ -485,6 +491,7 @@ OS-audio: context [
 		if null? dev [exit]
 		;-- stop dev
 		cdev: as COREAUDIO-DEVICE! dev
+		type-string/release cdev/id-str
 		type-string/release cdev/name
 		free as byte-ptr! cdev
 	]
@@ -518,12 +525,12 @@ OS-audio: context [
 
 	id: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[integer!]
+		return:		[unicode-string!]
 		/local
 			cdev	[COREAUDIO-DEVICE!]
 	][
 		cdev: as COREAUDIO-DEVICE! dev
-		cdev/id
+		cdev/id-str
 	]
 
 	channels-count: func [
