@@ -82,6 +82,21 @@ OS-audio: context [
 				id			[c-string!]
 				return:		[c-string!]
 			]
+			snd_pcm_open: "snd_pcm_open" [
+				pcm			[int-ptr!]
+				name		[c-string!]
+				stream		[integer!]
+				mode		[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_close: "snd_pcm_close" [
+				pcm			[integer!]
+				return:		[integer!]
+			]
+			snd_strerror: "snd_strerror" [
+				errnum		[integer!]
+				return:		[c-string!]
+			]
 		]
 	]
 
@@ -94,6 +109,24 @@ OS-audio: context [
 		stop-cb			[int-ptr!]
 		running?		[logic!]
 		buffer-size		[integer!]
+	]
+
+	output-filters: [
+		"default"		8
+		"pulse"			6
+		"sysdefault:"	11
+		"front:"		6
+		"dmix:"			5
+		"hw:"			3
+		"plughw:"		7
+	]
+
+	input-filters: [
+		"default"		8
+		"pulse"			6
+		"front:"		6
+		"hw:"			3
+		"plughw:"		7
 	]
 
 	init: func [
@@ -137,13 +170,9 @@ OS-audio: context [
 	]
 
 	init-device: func [
-		dev			[ALSA-DEVICE!]
-		hint		[int-ptr!]
+		adev		[ALSA-DEVICE!]
 	][
-		set-memory as byte-ptr! dev #"^(00)" size? ALSA-DEVICE!
-		dev/name: get-device-name hint
-		get-device-type hint
-		dev/running?: no
+		0
 	]
 
 	dump-device: func [
@@ -160,7 +189,9 @@ OS-audio: context [
 		][
 			print-line "    type: microphone"
 		]
-		;print-line ["    id: " cdev/id]
+		print "    id: "
+		type-string/uprint adev/id
+		print lf
 		print "    name: "
 		type-string/uprint adev/name
 		print lf
@@ -204,7 +235,7 @@ OS-audio: context [
 					set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
 					adev/name: type-string/load-utf8 as byte-ptr! name
 					adev/type: type
-					adev/running?: no
+					init-device adev
 					free as byte-ptr! name
 					unless null? ioid [
 						free as byte-ptr! ioid
@@ -231,6 +262,33 @@ OS-audio: context [
 		default-device ADEVICE-TYPE-OUTPUT
 	]
 
+	filter-name: func [
+		type		[AUDIO-DEVICE-TYPE!]
+		name		[c-string!]
+		return:		[logic!]
+		/local
+			size	[integer!]
+			p		[int-ptr!]
+			i		[integer!]
+			j		[integer!]
+	][
+		either type = ADEVICE-TYPE-OUTPUT [
+			size: size? output-filters
+			p: output-filters
+		][
+			size: size? input-filters
+			p: input-filters
+		]
+		size: size / 2
+		loop size [
+			if 0 = compare-memory as byte-ptr! name as byte-ptr! p/1 p/2 [
+				return true
+			]
+			p: p + 2
+		]
+		false
+	]
+
 	get-devices: func [
 		type		[AUDIO-DEVICE-TYPE!]
 		count		[int-ptr!]			;-- number of input devices
@@ -239,11 +297,18 @@ OS-audio: context [
 			hints	[integer!]
 			hint	[int-ptr!]
 			num		[integer!]
+			name	[c-string!]
 			ioid	[c-string!]
 			hr		[integer!]
 			list	[int-ptr!]
 			iter	[int-ptr!]
+			end		[int-ptr!]
+			flag	[logic!]
+			nlist	[int-ptr!]
+			niter	[int-ptr!]
 			adev	[ALSA-DEVICE!]
+			pcm		[integer!]
+			desc	[c-string!]
 	][
 		count/1: 0
 		hints: 0
@@ -251,64 +316,90 @@ OS-audio: context [
 		if hr <> 0 [return null]
 		hint: as int-ptr! hints
 		num: 0
-		while [hint/1 <> 0][
-			ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
-			if any [
-				null? ioid
-				all [
-					0 = compare-memory as byte-ptr! ioid as byte-ptr! "Input" 6
-					type = ADEVICE-TYPE-INPUT
-				]
-				all [
-					0 = compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
-					type = ADEVICE-TYPE-OUTPUT
-				]
-			][
-				num: num + 1
-				unless null? ioid [
-					free as byte-ptr! ioid
-				]
-			]
-			hint: hint + 1
-		]
-		if num = 0 [
-			snd_device_name_free_hint hints
-			return null
-		]
-		count/1: num
-		list: as int-ptr! allocate num + 1 * 4
-		iter: list + num
-		iter/1: 0
+		list: system/stack/allocate 256
 		iter: list
-		hint: as int-ptr! hints
+		end: list + 256
+		end/0: 0
 		while [hint/1 <> 0][
-			ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
+			name: snd_device_name_get_hint as int-ptr! hint/1 "NAME"
 			if any [
-				null? ioid
-				all [
-					0 = compare-memory as byte-ptr! ioid as byte-ptr! "Input" 6
-					type = ADEVICE-TYPE-INPUT
+				null? name
+				0 = compare-memory as byte-ptr! name as byte-ptr! "null" 5
+			][
+				unless null? name [
+					free as byte-ptr! name
 				]
-				all [
-					0 = compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
-					type = ADEVICE-TYPE-OUTPUT
+				hint: hint + 1
+				continue
+			]
+			flag: false
+			ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
+			either null? ioid [
+				if filter-name type name [
+					flag: true
 				]
 			][
-				unless null? ioid [
-					free as byte-ptr! ioid
+				if all [
+					filter-name type name
+					any [
+						all [
+							0 = compare-memory as byte-ptr! ioid as byte-ptr! "Input" 6
+							type = ADEVICE-TYPE-INPUT
+						]
+						all [
+							0 = compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
+							type = ADEVICE-TYPE-OUTPUT
+						]
+					]
+				][
+					flag: true
 				]
-				adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
-				set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
-				adev/name: get-device-name as int-ptr! hint/1
-				adev/type: type
-				adev/running?: no
-				iter/1: as integer! adev
-				iter: iter + 1
 			]
+			if flag [
+				pcm: 0
+				hr: snd_pcm_open :pcm name type 0
+				if hr = 0 [
+					snd_pcm_close pcm
+					either iter < end [
+						desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
+						adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
+						set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
+						adev/id: type-string/load-utf8 as byte-ptr! name
+						unless null? desc [
+							adev/name: type-string/load-utf8 as byte-ptr! desc
+							free as byte-ptr! desc
+						]
+						adev/type: type
+						init-device adev
+						iter/1: as integer! adev
+						iter: iter + 1
+						num: num + 1
+					][
+						unless null? ioid [
+							free as byte-ptr! ioid
+						]
+						free as byte-ptr! name
+						break
+					]
+				]
+			]
+			unless null? ioid [
+				free as byte-ptr! ioid
+			]
+			free as byte-ptr! name
 			hint: hint + 1
 		]
 		snd_device_name_free_hint hints
-		list
+		if num = 0 [
+			return null
+		]
+		iter/1: 0
+		count/1: num
+		nlist: as int-ptr! allocate num + 1 * 4
+		niter: list + num
+		niter/1: 0
+		copy-memory as byte-ptr! nlist as byte-ptr! list num * 4
+		nlist
 	]
 
 	input-devices: func [
