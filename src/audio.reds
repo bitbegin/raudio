@@ -146,6 +146,13 @@ audio: context [
 ]
 
 audio-device: context [
+	id: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[unicode-string!]
+	][
+		OS-audio/id dev
+	]
+
 	name: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[unicode-string!]
