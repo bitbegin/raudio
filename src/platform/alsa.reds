@@ -492,15 +492,21 @@ OS-audio: context [
 	name: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[unicode-string!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		null
+		adev: as ALSA-DEVICE! dev
+		adev/name
 	]
 
 	id: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[int-ptr!]
+		return:		[unicode-string!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		null
+		adev: as ALSA-DEVICE! dev
+		adev/id
 	]
 
 	channels-count: func [
