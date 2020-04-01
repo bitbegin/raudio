@@ -118,6 +118,16 @@ OS-audio: context [
 				val			[int-ptr!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_get_channels_min: "snd_pcm_hw_params_get_channels_min" [
+				params		[integer!]
+				val			[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_get_channels_max: "snd_pcm_hw_params_get_channels_max" [
+				params		[integer!]
+				val			[int-ptr!]
+				return:		[integer!]
+			]
 		]
 	]
 
@@ -134,7 +144,7 @@ OS-audio: context [
 	]
 
 	output-filters: [
-		"default"		8
+		"default"		7
 		"pulse"			6
 		"sysdefault:"	11
 		"front:"		6
@@ -144,7 +154,7 @@ OS-audio: context [
 	]
 
 	input-filters: [
-		"default"		8
+		"default"		7
 		"pulse"			6
 		"front:"		6
 		"hw:"			3
@@ -203,7 +213,7 @@ OS-audio: context [
 		if adev/params <> 0 [
 			val: 0
 			hr: snd_pcm_hw_params_get_channels adev/params :val
-			print-line [hr "    channels: " val]
+			print-line ["    channels: " val]
 		]
 		;print-line ["    sample rate: " sample-rate dev]
 		;print-line ["    buffer frames: " buffer-size dev]
