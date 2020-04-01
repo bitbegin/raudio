@@ -97,6 +97,27 @@ OS-audio: context [
 				errnum		[integer!]
 				return:		[c-string!]
 			]
+			snd_pcm_hw_params_malloc: "snd_pcm_hw_params_malloc" [
+				ptr			[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_free: "snd_pcm_hw_params_free" [
+				obj			[integer!]
+			]
+			snd_pcm_hw_params_copy: "snd_pcm_hw_params_copy" [
+				dst			[integer!]
+				src			[integer!]
+			]
+			snd_pcm_hw_params_any: "snd_pcm_hw_params_any" [
+				pcm			[integer!]
+				params		[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_get_channels: "snd_pcm_hw_params_get_channels" [
+				params		[integer!]
+				val			[int-ptr!]
+				return:		[integer!]
+			]
 		]
 	]
 
@@ -109,6 +130,7 @@ OS-audio: context [
 		stop-cb			[int-ptr!]
 		running?		[logic!]
 		buffer-size		[integer!]
+		params			[integer!]
 	]
 
 	output-filters: [
@@ -140,45 +162,28 @@ OS-audio: context [
 		0
 	]
 
-	get-device-name: func [
-		hint		[int-ptr!]
-		return:		[unicode-string!]
-		/local
-			name	[c-string!]
-			ustr	[unicode-string!]
-	][
-		name: snd_device_name_get_hint hint "NAME"
-		if null? name [return null]
-		ustr: type-string/load-utf8 as byte-ptr! name
-		free as byte-ptr! name
-		ustr
-	]
-
-	get-device-type: func [
-		hint		[int-ptr!]
-		;return:		[unicode-string!]
-		/local
-			name	[c-string!]
-			;ustr	[unicode-string!]
-	][
-		name: snd_device_name_get_hint hint "IOID"
-		if null? name [exit]
-		print-line name
-		;ustr: type-string/load-utf8 as byte-ptr! name
-		free as byte-ptr! name
-		;ustr
-	]
-
 	init-device: func [
 		adev		[ALSA-DEVICE!]
+		pcm			[integer!]
+		/local
+			hr		[integer!]
+			p		[int-ptr!]
+			id		[c-string!]
 	][
 		adev/running?: no
+		hr: snd_pcm_hw_params_malloc :adev/params
+		if hr <> 0 [exit]
+		p: as int-ptr! adev/id
+		id: as c-string! p + 1
+		hr: snd_pcm_hw_params_any pcm adev/params
 	]
 
 	dump-device: func [
 		dev			[AUDIO-DEVICE!]
 		/local
 			adev	[ALSA-DEVICE!]
+			val		[integer!]
+			hr		[integer!]
 	][
 		if null? dev [print-line "null device!" exit]
 		adev: as ALSA-DEVICE! dev
@@ -195,7 +200,11 @@ OS-audio: context [
 		print "    name: "
 		type-string/uprint adev/name
 		print lf
-		;print-line ["^/    channels: " cdev/buff-list/mBuffers/mNumberChannels]
+		if adev/params <> 0 [
+			val: 0
+			hr: snd_pcm_hw_params_get_channels adev/params :val
+			print-line [hr "    channels: " val]
+		]
 		;print-line ["    sample rate: " sample-rate dev]
 		;print-line ["    buffer frames: " buffer-size dev]
 		print-line "================================"
@@ -224,7 +233,6 @@ OS-audio: context [
 				pcm: 0
 				hr: snd_pcm_open :pcm name type 0
 				if hr = 0 [
-					snd_pcm_close pcm
 					ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
 					if any [
 						null? ioid
@@ -246,14 +254,16 @@ OS-audio: context [
 							free as byte-ptr! desc
 						]
 						adev/type: type
-						init-device adev
+						init-device adev pcm
 						free as byte-ptr! name
 						unless null? ioid [
 							free as byte-ptr! ioid
 						]
 						snd_device_name_free_hint hints
+						snd_pcm_close pcm
 						return as AUDIO-DEVICE! adev
 					]
+					snd_pcm_close pcm
 				]
 			]
 			hint: hint + 1
@@ -374,7 +384,6 @@ OS-audio: context [
 				pcm: 0
 				hr: snd_pcm_open :pcm name type 0
 				if hr = 0 [
-					snd_pcm_close pcm
 					either iter < end [
 						desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
 						adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
@@ -385,12 +394,14 @@ OS-audio: context [
 							free as byte-ptr! desc
 						]
 						adev/type: type
-						init-device adev
+						init-device adev pcm
 						iter/1: as integer! adev
 						iter: iter + 1
 						num: num + 1
+						snd_pcm_close pcm
 					][
 						free as byte-ptr! name
+						snd_pcm_close pcm
 						break
 					]
 				]
@@ -471,6 +482,9 @@ OS-audio: context [
 		adev: as ALSA-DEVICE! dev
 		type-string/release adev/id
 		type-string/release adev/name
+		if adev/params <> 0 [
+			snd_pcm_hw_params_free adev/params
+		]
 		free as byte-ptr! adev
 	]
 
