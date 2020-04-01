@@ -137,6 +137,10 @@ OS-audio: context [
 		]
 	]
 
+	#define SND_PCM_FORMAT_S16_LE		2
+	#define SND_PCM_FORMAT_S32_LE		10
+	#define SND_PCM_FORMAT_FLOAT_LE		14
+
 	ALSA-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
 		id				[unicode-string!]				;-- unicode format
@@ -147,6 +151,7 @@ OS-audio: context [
 		running?		[logic!]
 		buffer-size		[integer!]
 		params			[integer!]
+		pcm				[integer!]
 	]
 
 	output-filters: [
@@ -178,10 +183,6 @@ OS-audio: context [
 		0
 	]
 
-	#define SND_PCM_FORMAT_S16_LE 2
-	#define SND_PCM_FORMAT_S32_LE 10
-	#define SND_PCM_FORMAT_FLOAT_LE 14
-
 	init-device: func [
 		adev		[ALSA-DEVICE!]
 		pcm			[integer!]
@@ -196,7 +197,6 @@ OS-audio: context [
 		p: as int-ptr! adev/id
 		id: as c-string! p + 1
 		hr: snd_pcm_hw_params_any pcm adev/params
-		probe snd_pcm_hw_params_test_format pcm adev/params SND_PCM_FORMAT_FLOAT_LE
 	]
 
 	dump-device: func [
@@ -250,7 +250,7 @@ OS-audio: context [
 		hint: as int-ptr! hints
 		while [hint/1 <> 0][
 			name: snd_device_name_get_hint as int-ptr! hint/1 "NAME"
-			if 0 = compare-memory as byte-ptr! name as byte-ptr! "default" 8 [
+			if 0 = compare-memory as byte-ptr! name as byte-ptr! "default" 7 [
 				pcm: 0
 				hr: snd_pcm_open :pcm name type 0
 				if hr = 0 [
@@ -614,7 +614,30 @@ OS-audio: context [
 		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
 		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
+			format	[integer!]
+			p		[int-ptr!]
+			id		[c-string!]
+			hr		[integer!]
 	][
+		adev: as ALSA-DEVICE! dev
+		if adev/running? [return false]
+		format: case [
+			stype = ASAMPLE-TYPE-F32 [SND_PCM_FORMAT_FLOAT_LE]
+			stype = ASAMPLE-TYPE-I32 [SND_PCM_FORMAT_S32_LE]
+			stype = ASAMPLE-TYPE-I16 [SND_PCM_FORMAT_S16_LE]
+		]
+		p: as int-ptr! adev/id
+		id: as c-string! p + 1
+		hr: snd_pcm_open :adev/pcm id adev/type 0
+		if hr <> 0 [return false]
+		hr: snd_pcm_hw_params_test_format adev/pcm adev/params format
+		if hr <> 0 [
+			snd_pcm_close adev/pcm
+			return false
+		]
+		snd_pcm_close adev/pcm
 		true
 	]
 
