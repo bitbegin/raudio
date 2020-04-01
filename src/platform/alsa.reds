@@ -128,6 +128,12 @@ OS-audio: context [
 				val			[int-ptr!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_test_format: "snd_pcm_hw_params_test_format" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[integer!]
+				return:		[integer!]
+			]
 		]
 	]
 
@@ -172,6 +178,10 @@ OS-audio: context [
 		0
 	]
 
+	#define SND_PCM_FORMAT_S16_LE 2
+	#define SND_PCM_FORMAT_S32_LE 10
+	#define SND_PCM_FORMAT_FLOAT_LE 14
+
 	init-device: func [
 		adev		[ALSA-DEVICE!]
 		pcm			[integer!]
@@ -186,6 +196,7 @@ OS-audio: context [
 		p: as int-ptr! adev/id
 		id: as c-string! p + 1
 		hr: snd_pcm_hw_params_any pcm adev/params
+		probe snd_pcm_hw_params_test_format pcm adev/params SND_PCM_FORMAT_FLOAT_LE
 	]
 
 	dump-device: func [
