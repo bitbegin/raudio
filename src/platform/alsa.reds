@@ -93,6 +93,10 @@ OS-audio: context [
 				pcm			[integer!]
 				return:		[integer!]
 			]
+			snd_pcm_prepare: "snd_pcm_prepare" [
+				pcm			[integer!]
+				return:		[integer!]
+			]
 			snd_strerror: "snd_strerror" [
 				errnum		[integer!]
 				return:		[c-string!]
@@ -113,6 +117,11 @@ OS-audio: context [
 				params		[integer!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_current: "snd_pcm_hw_params_current" [
+				pcm			[integer!]
+				params		[integer!]
+				return:		[integer!]
+			]
 			snd_pcm_hw_params_get_channels: "snd_pcm_hw_params_get_channels" [
 				params		[integer!]
 				val			[int-ptr!]
@@ -128,10 +137,57 @@ OS-audio: context [
 				val			[int-ptr!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_set_channels: "snd_pcm_hw_params_set_channels" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_get_format: "snd_pcm_hw_params_get_format" [
+				params		[integer!]
+				val			[int-ptr!]
+				return:		[integer!]
+			]
 			snd_pcm_hw_params_test_format: "snd_pcm_hw_params_test_format" [
 				pcm			[integer!]
 				params		[integer!]
 				val			[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_set_format: "snd_pcm_hw_params_set_format" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_get_rate: "snd_pcm_hw_params_get_rate" [
+				params		[integer!]
+				val			[int-ptr!]
+				dir			[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_get_rate_min: "snd_pcm_hw_params_get_rate_min" [
+				params		[integer!]
+				val			[int-ptr!]
+				dir			[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_get_rate_max: "snd_pcm_hw_params_get_rate_max" [
+				params		[integer!]
+				val			[int-ptr!]
+				dir			[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_set_rate: "snd_pcm_hw_params_set_rate" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[integer!]
+				dir			[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params: "snd_pcm_hw_params" [
+				pcm			[integer!]
+				params		[integer!]
 				return:		[integer!]
 			]
 		]
@@ -183,6 +239,29 @@ OS-audio: context [
 		0
 	]
 
+	print-params: func [
+		pcm			[integer!]
+		params		[integer!]
+		/local
+			hr		[integer!]
+			val		[integer!]
+	][
+		print-line "===print-params==="
+		val: 0
+		hr: snd_pcm_hw_params_get_rate_min params :val null
+		print-line ["min rate: " val "	" snd_strerror hr]
+		val: 0
+		hr: snd_pcm_hw_params_get_rate_max params :val null
+		print-line ["max rate: " val "	" snd_strerror hr]
+		val: 0
+		hr: snd_pcm_hw_params_get_channels_min params :val
+		print-line ["min chs: " val "	" snd_strerror hr]
+		val: 0
+		hr: snd_pcm_hw_params_get_channels_max params :val
+		print-line ["min chs: " val "	" snd_strerror hr]
+		print-line "=================="
+	]
+
 	init-device: func [
 		adev		[ALSA-DEVICE!]
 		pcm			[integer!]
@@ -190,6 +269,7 @@ OS-audio: context [
 			hr		[integer!]
 			p		[int-ptr!]
 			id		[c-string!]
+			val		[integer!]
 	][
 		adev/running?: no
 		hr: snd_pcm_hw_params_malloc :adev/params
@@ -197,6 +277,20 @@ OS-audio: context [
 		p: as int-ptr! adev/id
 		id: as c-string! p + 1
 		hr: snd_pcm_hw_params_any pcm adev/params
+		print-params pcm adev/params
+		;hr: snd_pcm_hw_params_current pcm adev/params
+		print-line ["any: " snd_strerror hr]
+		hr: snd_pcm_hw_params_set_channels pcm adev/params 2
+		print-line ["chs: " snd_strerror hr]
+		hr: snd_pcm_hw_params_set_format pcm adev/params SND_PCM_FORMAT_FLOAT_LE
+		print-line ["format: " snd_strerror hr]
+		hr: snd_pcm_hw_params_set_rate pcm adev/params 44100 0
+		print-line ["rate: " snd_strerror hr]
+		hr: snd_pcm_hw_params pcm adev/params
+		print-line ["set: " snd_strerror hr]
+		val: 0
+		hr: snd_pcm_hw_params_get_channels_max adev/params :val
+		print-line [snd_strerror hr " " val]
 	]
 
 	dump-device: func [
@@ -225,6 +319,9 @@ OS-audio: context [
 			val: 0
 			hr: snd_pcm_hw_params_get_channels adev/params :val
 			print-line ["    channels: " val]
+			val: 0
+			hr: snd_pcm_hw_params_get_rate adev/params :val null
+			print-line ["    sample rate: " val]
 		]
 		;print-line ["    sample rate: " sample-rate dev]
 		;print-line ["    buffer frames: " buffer-size dev]
@@ -638,6 +735,9 @@ OS-audio: context [
 			return false
 		]
 		snd_pcm_close adev/pcm
+		format: 0
+		hr: snd_pcm_hw_params_get_channels adev/params :format
+		print-line [hr " " format]
 		true
 	]
 
