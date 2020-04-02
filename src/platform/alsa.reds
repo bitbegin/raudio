@@ -347,42 +347,51 @@ OS-audio: context [
 		hint: as int-ptr! hints
 		while [hint/1 <> 0][
 			name: snd_device_name_get_hint as int-ptr! hint/1 "NAME"
-			if 0 = compare-memory as byte-ptr! name as byte-ptr! "default" 7 [
-				pcm: 0
-				hr: snd_pcm_open :pcm name type 0
-				if hr = 0 [
-					ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
-					if any [
-						null? ioid
-						all [
-							0 = compare-memory as byte-ptr! ioid as byte-ptr! "Input" 6
-							type = ADEVICE-TYPE-INPUT
-						]
-						all [
-							0 = compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
-							type = ADEVICE-TYPE-OUTPUT
-						]
-					][
-						desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
-						adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
-						set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
-						adev/id: type-string/load-utf8 as byte-ptr! name
-						unless null? desc [
-							adev/name: type-string/load-utf8 as byte-ptr! desc
-							free as byte-ptr! desc
-						]
-						adev/type: type
-						init-device adev pcm
-						free as byte-ptr! name
-						unless null? ioid [
-							free as byte-ptr! ioid
-						]
-						snd_device_name_free_hint hints
-						snd_pcm_close pcm
-						return as AUDIO-DEVICE! adev
-					]
-					snd_pcm_close pcm
+			if null? name [
+				hint: hint + 1
+				continue
+			]
+			if 0 <> compare-memory as byte-ptr! name as byte-ptr! "default" 7 [
+				free as byte-ptr! name
+				hint: hint + 1
+				continue
+			]
+			ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
+			if all [
+				not null? ioid
+				0 <> compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
+			][
+				free as byte-ptr! name
+				unless null? ioid [
+					free as byte-ptr! ioid
 				]
+				hint: hint + 1
+				continue
+			]
+			pcm: 0
+			hr: snd_pcm_open :pcm name type 0
+			if hr = 0 [
+				desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
+				adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
+				set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
+				adev/id: type-string/load-utf8 as byte-ptr! name
+				unless null? desc [
+					adev/name: type-string/load-utf8 as byte-ptr! desc
+					free as byte-ptr! desc
+				]
+				adev/type: type
+				init-device adev pcm
+				snd_pcm_close pcm
+				free as byte-ptr! name
+				unless null? ioid [
+					free as byte-ptr! ioid
+				]
+				snd_device_name_free_hint hints
+				return as AUDIO-DEVICE! adev
+			]
+			free as byte-ptr! name
+			unless null? ioid [
+				free as byte-ptr! ioid
 			]
 			hint: hint + 1
 		]
