@@ -190,6 +190,9 @@ OS-audio: context [
 				params		[integer!]
 				return:		[integer!]
 			]
+			snd_asoundlib_version: "snd_asoundlib_version" [
+				return:		[c-string!]
+			]
 		]
 	]
 
@@ -247,18 +250,22 @@ OS-audio: context [
 			val		[integer!]
 	][
 		print-line "===print-params==="
+		print-line snd_asoundlib_version
+		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S16_LE
+		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S32_LE
+		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_FLOAT_LE
 		val: 0
 		hr: snd_pcm_hw_params_get_rate_min params :val null
-		print-line ["min rate: " val "	" snd_strerror hr]
+		print-line ["min rate: " val "	" hr " " snd_strerror hr]
 		val: 0
 		hr: snd_pcm_hw_params_get_rate_max params :val null
-		print-line ["max rate: " val "	" snd_strerror hr]
+		print-line ["max rate: " val "	" hr " " snd_strerror hr]
 		val: 0
 		hr: snd_pcm_hw_params_get_channels_min params :val
-		print-line ["min chs: " val "	" snd_strerror hr]
+		print-line ["min chs: " val "	" hr " " snd_strerror hr]
 		val: 0
 		hr: snd_pcm_hw_params_get_channels_max params :val
-		print-line ["min chs: " val "	" snd_strerror hr]
+		print-line ["max chs: " val "	" hr " " snd_strerror hr]
 		print-line "=================="
 	]
 
@@ -289,7 +296,7 @@ OS-audio: context [
 		hr: snd_pcm_hw_params pcm adev/params
 		print-line ["set: " snd_strerror hr]
 		val: 0
-		hr: snd_pcm_hw_params_get_channels_max adev/params :val
+		hr: snd_pcm_hw_params_get_channels adev/params :val
 		print-line [snd_strerror hr " " val]
 	]
 
