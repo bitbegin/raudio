@@ -67,6 +67,25 @@ OS-audio: context [
 				state		[integer!]
 				return:		[c-string!]
 			]
+			snd_card_next: "snd_card_next" [
+				card		[int-ptr!]
+				return:		[integer!]
+			]
+			snd_ctl_open: "snd_ctl_open" [
+				ctl			[int-ptr!]
+				name		[c-string!]
+				mode		[integer!]
+				return:		[integer!]
+			]
+			snd_ctl_card_info: "snd_ctl_card_info" [
+				ctl			[int-ptr!]
+				info		[int-ptr!]
+				return:		[integer!]
+			]
+			snd_ctl_close: "snd_ctl_close" [
+				ctl			[int-ptr!]
+				return:		[integer!]
+			]
 			snd_device_name_hint: "snd_device_name_hint" [
 				card		[integer!]
 				iface		[c-string!]
@@ -122,17 +141,17 @@ OS-audio: context [
 				params		[integer!]
 				return:		[integer!]
 			]
-			snd_pcm_hw_params_get_channels: "snd_pcm_hw_params_get_channels" [
+			snd_pcm_hw_params_get_channels: "__snd_pcm_hw_params_get_channels" [
 				params		[integer!]
 				val			[int-ptr!]
 				return:		[integer!]
 			]
-			snd_pcm_hw_params_get_channels_min: "snd_pcm_hw_params_get_channels_min" [
+			snd_pcm_hw_params_get_channels_min: "__snd_pcm_hw_params_get_channels_min" [
 				params		[integer!]
 				val			[int-ptr!]
 				return:		[integer!]
 			]
-			snd_pcm_hw_params_get_channels_max: "snd_pcm_hw_params_get_channels_max" [
+			snd_pcm_hw_params_get_channels_max: "__snd_pcm_hw_params_get_channels_max" [
 				params		[integer!]
 				val			[int-ptr!]
 				return:		[integer!]
@@ -143,7 +162,7 @@ OS-audio: context [
 				val			[integer!]
 				return:		[integer!]
 			]
-			snd_pcm_hw_params_get_format: "snd_pcm_hw_params_get_format" [
+			snd_pcm_hw_params_get_format: "__snd_pcm_hw_params_get_format" [
 				params		[integer!]
 				val			[int-ptr!]
 				return:		[integer!]
@@ -160,19 +179,19 @@ OS-audio: context [
 				val			[integer!]
 				return:		[integer!]
 			]
-			snd_pcm_hw_params_get_rate: "snd_pcm_hw_params_get_rate" [
+			snd_pcm_hw_params_get_rate: "__snd_pcm_hw_params_get_rate" [
 				params		[integer!]
 				val			[int-ptr!]
 				dir			[int-ptr!]
 				return:		[integer!]
 			]
-			snd_pcm_hw_params_get_rate_min: "snd_pcm_hw_params_get_rate_min" [
+			snd_pcm_hw_params_get_rate_min: "__snd_pcm_hw_params_get_rate_min" [
 				params		[integer!]
 				val			[int-ptr!]
 				dir			[int-ptr!]
 				return:		[integer!]
 			]
-			snd_pcm_hw_params_get_rate_max: "snd_pcm_hw_params_get_rate_max" [
+			snd_pcm_hw_params_get_rate_max: "__snd_pcm_hw_params_get_rate_max" [
 				params		[integer!]
 				val			[int-ptr!]
 				dir			[int-ptr!]
@@ -251,15 +270,18 @@ OS-audio: context [
 	][
 		print-line "===print-params==="
 		print-line snd_asoundlib_version
-		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S16_LE
-		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S32_LE
-		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_FLOAT_LE
+		;hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S16_LE
+		;hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S32_LE
+		;hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_FLOAT_LE
+		;val: 0
+		;hr: snd_pcm_hw_params_get_rate_min params :val null
+		;print-line ["min rate: " val "	" hr " " snd_strerror hr]
+		;val: 0
+		;hr: snd_pcm_hw_params_get_rate_max params :val null
+		;print-line ["max rate: " val "	" hr " " snd_strerror hr]
 		val: 0
-		hr: snd_pcm_hw_params_get_rate_min params :val null
-		print-line ["min rate: " val "	" hr " " snd_strerror hr]
-		val: 0
-		hr: snd_pcm_hw_params_get_rate_max params :val null
-		print-line ["max rate: " val "	" hr " " snd_strerror hr]
+		hr: snd_pcm_hw_params_get_channels params :val
+		print-line ["chs: " val "	" hr " " snd_strerror hr]
 		val: 0
 		hr: snd_pcm_hw_params_get_channels_min params :val
 		print-line ["min chs: " val "	" hr " " snd_strerror hr]
@@ -339,71 +361,23 @@ OS-audio: context [
 		type		[AUDIO-DEVICE-TYPE!]
 		return:		[AUDIO-DEVICE!]
 		/local
-			hints	[integer!]
-			hint	[int-ptr!]
-			hr		[integer!]
 			name	[c-string!]
-			ioid	[c-string!]
-			adev	[ALSA-DEVICE!]
 			pcm		[integer!]
-			desc	[c-string!]
+			hr		[integer!]
+			adev	[ALSA-DEVICE!]
 	][
-		hints: 0
-		hr: snd_device_name_hint -1 "pcm" :hints
-		if hr <> 0 [return null]
-		hint: as int-ptr! hints
-		while [hint/1 <> 0][
-			name: snd_device_name_get_hint as int-ptr! hint/1 "NAME"
-			if null? name [
-				hint: hint + 1
-				continue
-			]
-			if 0 <> compare-memory as byte-ptr! name as byte-ptr! "default" 7 [
-				free as byte-ptr! name
-				hint: hint + 1
-				continue
-			]
-			ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
-			if all [
-				not null? ioid
-				0 <> compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
-			][
-				free as byte-ptr! name
-				unless null? ioid [
-					free as byte-ptr! ioid
-				]
-				hint: hint + 1
-				continue
-			]
-			pcm: 0
-			hr: snd_pcm_open :pcm name type 0
-			if hr = 0 [
-				desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
-				adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
-				set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
-				adev/id: type-string/load-utf8 as byte-ptr! name
-				unless null? desc [
-					adev/name: type-string/load-utf8 as byte-ptr! desc
-					free as byte-ptr! desc
-				]
-				adev/type: type
-				init-device adev pcm
-				snd_pcm_close pcm
-				free as byte-ptr! name
-				unless null? ioid [
-					free as byte-ptr! ioid
-				]
-				snd_device_name_free_hint hints
-				return as AUDIO-DEVICE! adev
-			]
-			free as byte-ptr! name
-			unless null? ioid [
-				free as byte-ptr! ioid
-			]
-			hint: hint + 1
-		]
-		snd_device_name_free_hint hints
-		null
+		name: "default"
+		pcm: 0
+		hr: snd_pcm_open :pcm name type 0
+		if hr < 0 [return null]
+		print-line name
+		adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
+		set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
+		adev/id: type-string/load-utf8 as byte-ptr! name
+		adev/type: type
+		init-device adev pcm
+		snd_pcm_close pcm
+		as AUDIO-DEVICE! adev
 	]
 
 	default-input-device: func [
