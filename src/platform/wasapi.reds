@@ -74,14 +74,22 @@ OS-audio: context [
 		name			[unicode-string!]				;-- unicode format
 		client			[this!]
 		mix-format		[WAVEFORMATEXTENSIBLE! value]
-		sample-type		[AUDIO-SAMPLE-TYPE!]
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
 		event			[int-ptr!]
-		buffer-size		[integer!]
 		service			[this!]
 		thread			[int-ptr!]
+		buffer-size		[integer!]
+		channels		[int-ptr!]						;-- support channels list
+		channels-count	[integer!]
+		rates			[int-ptr!]						;-- support rates list
+		rates-count		[integer!]
+		formats			[int-ptr!]						;-- support formats list
+		formats-count	[integer!]
+		channel			[integer!]						;-- default channels
+		rate			[integer!]						;-- default rate
+		format			[AUDIO-SAMPLE-TYPE!]			;-- default format
 	]
 
 	#import [
@@ -624,6 +632,45 @@ OS-audio: context [
 		wdev/id
 	]
 
+	channels: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if null? wdev/channels [return null]
+		count/1: wdev/channels-count
+		wdev/channels
+	]
+
+	rates: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if null? wdev/rates [return null]
+		count/1: wdev/rates-count
+		wdev/rates
+	]
+
+	sample-formats: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		if null? wdev/formats [return null]
+		count/1: wdev/formats-count
+		wdev/formats
+	]
+
 	channels-count: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
@@ -757,7 +804,7 @@ OS-audio: context [
 		wdev: as WASAPI-DEVICE! dev
 		if wdev/running? [return false]
 		format: wdev/mix-format
-		wdev/sample-type: stype
+		wdev/format: stype
 		case [
 			;-- float
 			stype = ASAMPLE-TYPE-F32 [
@@ -818,14 +865,14 @@ OS-audio: context [
 			if data = 0 [exit]
 			pcb: as AUDIO-IO-CALLBACK! io-cb
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
-			abuff/buffer/sample-type: wdev/sample-type
+			abuff/buffer/sample-type: wdev/format
 			abuff/buffer/frames-count: num
 			temp: wdev/mix-format/TagChannels >>> 16
 			abuff/buffer/channels-count: temp
 			abuff/buffer/stride: temp
 			abuff/buffer/contiguous?: yes
 			chs: as int-ptr! abuff/buffer/channels
-			size: either wdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			size: either wdev/format = ASAMPLE-TYPE-I16 [2][4]
 			step: data
 			loop temp [
 				chs/1: step
@@ -848,14 +895,14 @@ OS-audio: context [
 			if data = 0 [exit]
 			pcb: as AUDIO-IO-CALLBACK! io-cb
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
-			abuff/buffer/sample-type: wdev/sample-type
+			abuff/buffer/sample-type: wdev/format
 			abuff/buffer/frames-count: next-size
 			temp: wdev/mix-format/TagChannels >>> 16
 			abuff/buffer/channels-count: temp
 			abuff/buffer/stride: temp
 			abuff/buffer/contiguous?: yes
 			chs: as int-ptr! abuff/buffer/channels
-			size: either wdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			size: either wdev/format = ASAMPLE-TYPE-I16 [2][4]
 			step: data
 			loop temp [
 				chs/1: step
