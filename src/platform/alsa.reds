@@ -1077,22 +1077,31 @@ OS-audio: context [
 	input?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		false
+		adev: as ALSA-DEVICE! dev
+		adev/type = ADEVICE-TYPE-INPUT
 	]
 
 	output?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		false
+		adev: as ALSA-DEVICE! dev
+		adev/type = ADEVICE-TYPE-OUTPUT
 	]
 
 	running?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		no
+		adev: as ALSA-DEVICE! dev
+		adev/running?
 	]
 
 	has-unprocessed-io?: func [
