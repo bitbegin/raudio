@@ -250,22 +250,16 @@ OS-audio: context [
 		pcm				[integer!]
 	]
 
-	output-filters: [
-		"default"		7
-		"pulse"			6
-		"sysdefault:"	11
-		"front:"		6
-		"dmix:"			5
-		"hw:"			3
-		"plughw:"		7
+	output-desired: [
+		"plughw"		6
 	]
 
 	input-filters: [
 		"default"		7
-		"pulse"			6
-		"front:"		6
-		"hw:"			3
-		"plughw:"		7
+		"dmix"			4
+		"null"			4
+		"pulse"			5
+		"surround"		8
 	]
 
 	rates-filters: [
@@ -553,13 +547,20 @@ OS-audio: context [
 			i		[integer!]
 			j		[integer!]
 	][
-		either type = ADEVICE-TYPE-OUTPUT [
-			size: size? output-filters
-			p: output-filters
-		][
+		if type = ADEVICE-TYPE-INPUT [
 			size: size? input-filters
 			p: input-filters
+			size: size / 2
+			loop size [
+				if 0 = compare-memory as byte-ptr! name as byte-ptr! p/1 p/2 [
+					return false
+				]
+				p: p + 2
+			]
+			return true
 		]
+		size: size? output-desired
+		p: output-desired
 		size: size / 2
 		loop size [
 			if 0 = compare-memory as byte-ptr! name as byte-ptr! p/1 p/2 [
@@ -575,100 +576,99 @@ OS-audio: context [
 		count		[int-ptr!]			;-- number of input devices
 		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
 		/local
-			hints	[integer!]
-			hint	[int-ptr!]
 			num		[integer!]
-			name	[c-string!]
-			ioid	[c-string!]
-			hr		[integer!]
 			list	[int-ptr!]
 			iter	[int-ptr!]
 			end		[int-ptr!]
-			flag	[logic!]
-			nlist	[int-ptr!]
-			niter	[int-ptr!]
+			card	[integer!]
+			hr		[integer!]
+			hints	[integer!]
+			hint	[int-ptr!]
+			name	[c-string!]
+			ioid	[c-string!]
+			desc	[c-string!]
 			adev	[ALSA-DEVICE!]
 			pcm		[integer!]
-			desc	[c-string!]
+			nlist	[int-ptr!]
+			niter	[int-ptr!]
 	][
 		count/1: 0
-		hints: 0
-		hr: snd_device_name_hint -1 "pcm" :hints
-		if hr <> 0 [return null]
-		hint: as int-ptr! hints
 		num: 0
 		list: system/stack/allocate 256
 		iter: list
 		end: list + 256
 		end/0: 0
-		while [hint/1 <> 0][
-			name: snd_device_name_get_hint as int-ptr! hint/1 "NAME"
+		card: -1
+		forever [
+			hr: snd_card_next :card
 			if any [
-				null? name
-				0 = compare-memory as byte-ptr! name as byte-ptr! "null" 5
-			][
-				unless null? name [
+				hr <> 0
+				card = -1
+			][break]
+			hints: 0
+			hr: snd_device_name_hint card "pcm" :hints
+			if hr <> 0 [continue]
+			hint: as int-ptr! hints
+			while [hint/1 <> 0][
+				name: snd_device_name_get_hint as int-ptr! hint/1 "NAME"
+				if null? name [
+					hint: hint + 1
+					continue
+				]
+				unless filter-name type name [
 					free as byte-ptr! name
+					hint: hint + 1
+					continue
 				]
-				hint: hint + 1
-				continue
-			]
-			flag: false
-			ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
-			either null? ioid [
-				if filter-name type name [
-					flag: true
-				]
-			][
-				if all [
-					filter-name type name
-					any [
-						all [
-							0 = compare-memory as byte-ptr! ioid as byte-ptr! "Input" 6
-							type = ADEVICE-TYPE-INPUT
-						]
-						all [
-							0 = compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
-							type = ADEVICE-TYPE-OUTPUT
-						]
+				ioid: snd_device_name_get_hint as int-ptr! hint/1 "IOID"
+				if any [
+					null? ioid
+					all [
+						0 = compare-memory as byte-ptr! ioid as byte-ptr! "Input" 6
+						type = ADEVICE-TYPE-INPUT
+					]
+					all [
+						0 = compare-memory as byte-ptr! ioid as byte-ptr! "Output" 7
+						type = ADEVICE-TYPE-OUTPUT
 					]
 				][
-					flag: true
-				]
-			]
-			unless null? ioid [
-				free as byte-ptr! ioid
-			]
-			if flag [
-				pcm: 0
-				hr: snd_pcm_open :pcm name type 0
-				if hr = 0 [
-					either iter < end [
-						desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
-						adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
-						set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
-						adev/id: type-string/load-utf8 as byte-ptr! name
-						unless null? desc [
-							adev/name: type-string/load-utf8 as byte-ptr! desc
-							free as byte-ptr! desc
+					pcm: 0
+					hr: snd_pcm_open :pcm name type 0
+					if hr >= 0 [
+						either iter < end [
+							desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
+							adev: as ALSA-DEVICE! allocate size? ALSA-DEVICE!
+							set-memory as byte-ptr! adev #"^(00)" size? ALSA-DEVICE!
+							adev/id: type-string/load-utf8 as byte-ptr! name
+							unless null? desc [
+								adev/name: type-string/load-utf8 as byte-ptr! desc
+								free as byte-ptr! desc
+							]
+							adev/type: type
+							init-device adev pcm
+							iter/1: as integer! adev
+							iter: iter + 1
+							num: num + 1
+							snd_pcm_close pcm
+						][
+							free as byte-ptr! name
+							unless null? ioid [
+								free as byte-ptr! ioid
+							]
+							snd_pcm_close pcm
+							break
 						]
-						adev/type: type
-						init-device adev pcm
-						iter/1: as integer! adev
-						iter: iter + 1
-						num: num + 1
-						snd_pcm_close pcm
-					][
-						free as byte-ptr! name
-						snd_pcm_close pcm
-						break
 					]
 				]
+				free as byte-ptr! name
+				unless null? ioid [
+					free as byte-ptr! ioid
+				]
+				hint: hint + 1
 			]
-			free as byte-ptr! name
-			hint: hint + 1
+			snd_device_name_free_hint hints
 		]
-		snd_device_name_free_hint hints
+
 		if num = 0 [
 			return null
 		]
