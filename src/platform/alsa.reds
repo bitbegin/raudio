@@ -260,6 +260,8 @@ OS-audio: context [
 		"null"			4
 		"pulse"			5
 		"surround"		8
+		"iec958"		6			;-- avoid some issues like: ALSA lib setup.c:547:(add_elem) Cannot obtain info for CTL elem (PCM,'IEC958 Playback PCM Stream',0,0,0): No such file or directory
+		"usbstream"		9			;-- ALSA lib pcm_usb_stream.c:508:(_snd_pcm_usb_stream_open) Unknown field hint
 	]
 
 	rates-filters: [
@@ -633,7 +635,9 @@ OS-audio: context [
 					]
 				][
 					pcm: 0
-					hr: snd_pcm_open :pcm name type 0
+					;print-line ["name: " name]
+					hr: snd_pcm_open :pcm name type 0						;-- if the alsa lib not support the device, it will print some warnings
+					;print-line ["hr: " hr " " snd_strerror hr]
 					if hr >= 0 [
 						either iter < end [
 							desc: snd_device_name_get_hint as int-ptr! hint/1 "DESC"
