@@ -444,6 +444,7 @@ OS-audio: context [
 			adev	[ALSA-DEVICE!]
 			val		[integer!]
 			hr		[integer!]
+			p		[int-ptr!]
 	][
 		if null? dev [print-line "null device!" exit]
 		adev: as ALSA-DEVICE! dev
@@ -459,16 +460,50 @@ OS-audio: context [
 		print lf
 		print "    name: "
 		type-string/uprint adev/name
+		print "^/    formats: "
+		either null? adev/formats [
+			print-line "none"
+		][
+			p: adev/formats
+			loop adev/formats-count [
+				case [
+					p/1 = ASAMPLE-TYPE-F32 [
+						print "float32! "
+					]
+					p/1 = ASAMPLE-TYPE-I32 [
+						print "integer! "
+					]
+					p/1 = ASAMPLE-TYPE-I16 [
+						print "int16! "
+					]
+					true [
+						print "unknown "
+					]
+				]
+				p: p + 1
+			]
+		]
+		print "^/    channels: "
+		either null? adev/channels [
+			print-line "none"
+		][
+			p: adev/channels
+			loop adev/channels-count [
+				print [p/1 " "]
+				p: p + 1
+			]
+		]
+		print "^/    rates: "
+		either null? adev/rates [
+			print-line "none"
+		][
+			p: adev/rates
+			loop adev/rates-count [
+				print [p/1 " "]
+				p: p + 1
+			]
+		]
 		print lf
-		;if adev/params <> 0 [
-		;	val: 0
-		;	hr: snd_pcm_hw_params_get_channels adev/params :val
-		;	print-line ["    channels: " val]
-		;	val: 0
-		;	hr: snd_pcm_hw_params_get_rate adev/params :val null
-		;	print-line ["    sample rate: " val]
-		;]
-		;print-line ["    sample rate: " sample-rate dev]
 		;print-line ["    buffer frames: " buffer-size dev]
 		print-line "================================"
 	]
