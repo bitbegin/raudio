@@ -287,11 +287,10 @@ audio-device: context [
 
 	connect: func [
 		dev			[AUDIO-DEVICE!]
-		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]				;-- audio-io-callback!
 		return:		[logic!]
 	][
-		OS-audio/connect dev stype io-cb
+		OS-audio/connect dev io-cb
 	]
 
 	start: func [

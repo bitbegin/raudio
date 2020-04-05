@@ -1113,7 +1113,6 @@ OS-audio: context [
 
 	connect: func [
 		dev			[AUDIO-DEVICE!]
-		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
 		return:		[logic!]
 		/local
@@ -1125,11 +1124,6 @@ OS-audio: context [
 	][
 		adev: as ALSA-DEVICE! dev
 		if adev/running? [return false]
-		format: case [
-			stype = ASAMPLE-TYPE-F32 [SND_PCM_FORMAT_FLOAT_LE]
-			stype = ASAMPLE-TYPE-I32 [SND_PCM_FORMAT_S32_LE]
-			stype = ASAMPLE-TYPE-I16 [SND_PCM_FORMAT_S16_LE]
-		]
 		p: as int-ptr! adev/id
 		id: as c-string! p + 1
 		hr: snd_pcm_open :adev/pcm id adev/type 0
