@@ -236,17 +236,19 @@ OS-audio: context [
 		type			[AUDIO-DEVICE-TYPE!]
 		id				[unicode-string!]				;-- unicode format
 		name			[unicode-string!]				;-- unicode format
-		sample-type		[AUDIO-SAMPLE-TYPE!]
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
 		buffer-size		[integer!]
-		channels		[int-ptr!]
+		channels		[int-ptr!]						;-- support channels list
 		channels-count	[integer!]
-		rates			[int-ptr!]
+		rates			[int-ptr!]						;-- support rates list
 		rates-count		[integer!]
-		formats			[int-ptr!]
+		formats			[int-ptr!]						;-- support formats list
 		formats-count	[integer!]
+		channel			[integer!]						;-- default channels
+		rate			[integer!]						;-- default rate
+		format			[AUDIO-SAMPLE-TYPE!]			;-- default format
 		pcm				[integer!]
 	]
 
@@ -294,6 +296,7 @@ OS-audio: context [
 	init-device: func [
 		adev			[ALSA-DEVICE!]
 		pcm				[integer!]
+		return:			[logic!]
 		/local
 			params		[integer!]
 			hr			[integer!]
@@ -309,45 +312,51 @@ OS-audio: context [
 			filters		[int-ptr!]
 	][
 		adev/running?: no
+		adev/format: -1
+		adev/channel: 0
+		adev/rate: 0
 		;-- get hw-params
 		params: 0
 		hr: snd_pcm_hw_params_malloc :params
-		if hr < 0 [exit]
+		if hr < 0 [return false]
 		p: as int-ptr! adev/id
 		id: as c-string! p + 1
 		hr: snd_pcm_hw_params_any pcm params
 		if hr < 0 [
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		;-- get formats
 		count: 0
 		formats: as int-ptr! allocate 4 * 4
 		set-memory as byte-ptr! formats #"^(00)" 4 * 4
 		adev/formats: formats
-		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_FLOAT_LE
+		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S16_LE
 		if hr = 0 [
-			formats/1: ASAMPLE-TYPE-F32
+			formats/1: ASAMPLE-TYPE-I16
 			formats: formats + 1
 			count: count + 1
+			adev/format: ASAMPLE-TYPE-I16
 		]
 		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S32_LE
 		if hr = 0 [
 			formats/1: ASAMPLE-TYPE-I32
 			formats: formats + 1
 			count: count + 1
+			adev/format: ASAMPLE-TYPE-I32
 		]
-		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_S16_LE
+		hr: snd_pcm_hw_params_test_format pcm params SND_PCM_FORMAT_FLOAT_LE
 		if hr = 0 [
-			formats/1: ASAMPLE-TYPE-I16
+			formats/1: ASAMPLE-TYPE-F32
 			formats: formats + 1
 			count: count + 1
+			adev/format: ASAMPLE-TYPE-F32
 		]
 		if count = 0 [
 			free as byte-ptr! adev/formats
 			adev/formats: null
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		adev/formats-count: count
 		;-- get channels
@@ -355,20 +364,21 @@ OS-audio: context [
 		hr: snd_pcm_hw_params_get_channels_min params :min
 		if hr < 0 [
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		max: 0
 		hr: snd_pcm_hw_params_get_channels_max params :max
 		if hr < 0 [
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		if min > max [
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		if min = 0 [min: 1]
 		if max > 16 [max: 16]
+		if max < 0 [max: 16]
 		if min = max [max: min + 1]
 		count: 0
 		channels: as int-ptr! allocate 16 + 1 * 4
@@ -380,6 +390,21 @@ OS-audio: context [
 				channels/1: min
 				channels: channels + 1
 				count: count + 1
+				case [
+					adev/channel = 0 [
+						adev/channel: min
+					]
+					min = 2 [
+						adev/channel: 2
+					]
+					all [
+						min = 1
+						adev/channel <> 2
+					][
+						adev/channel: 1
+					]
+					true [0]
+				]
 			]
 			min: min + 1
 		]
@@ -387,7 +412,7 @@ OS-audio: context [
 			free as byte-ptr! adev/channels
 			adev/channels: null
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		adev/channels-count: count
 		;-- get rates
@@ -395,14 +420,15 @@ OS-audio: context [
 		hr: snd_pcm_hw_params_get_rate_min params :min null
 		if hr < 0 [
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		max: 0
 		hr: snd_pcm_hw_params_get_rate_max params :max null
 		if hr < 0 [
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
+		if max < 0 [max: 192000]
 		num: size? rates-filters
 		if min = max [max: min + 1]
 		count: 0
@@ -420,6 +446,9 @@ OS-audio: context [
 					rates/1: filters/1
 					rates: rates + 1
 					count: count + 1
+					if adev/rate <> 44100 [
+						adev/rate: filters/1
+					]
 				]
 			]
 			filters: filters + 1
@@ -428,10 +457,17 @@ OS-audio: context [
 			free as byte-ptr! adev/rates
 			adev/rates: null
 			snd_pcm_hw_params_free params
-			exit
+			return false
 		]
 		adev/rates-count: count
+		hr: snd_pcm_hw_params_set_format pcm params adev/format
+		;if hr < 0 [print-line ["set format: " snd_strerror hr]]
+		hr: snd_pcm_hw_params_set_channels pcm params adev/channel
+		;if hr < 0 [print-line ["set channels: " snd_strerror hr]]
+		hr: snd_pcm_hw_params_set_rate pcm params adev/rate 0
+		;if hr < 0 [print-line ["set rate: " snd_strerror hr]]
 		snd_pcm_hw_params_free params
+		true
 	]
 
 	dump-device: func [
@@ -458,7 +494,7 @@ OS-audio: context [
 		type-string/uprint adev/name
 		print "^/    formats: "
 		either null? adev/formats [
-			print-line "none"
+			print "none"
 		][
 			p: adev/formats
 			loop adev/formats-count [
@@ -481,7 +517,7 @@ OS-audio: context [
 		]
 		print "^/    channels: "
 		either null? adev/channels [
-			print-line "none"
+			print "none"
 		][
 			p: adev/channels
 			loop adev/channels-count [
@@ -491,7 +527,7 @@ OS-audio: context [
 		]
 		print "^/    rates: "
 		either null? adev/rates [
-			print-line "none"
+			print "none"
 		][
 			p: adev/rates
 			loop adev/rates-count [
@@ -499,7 +535,23 @@ OS-audio: context [
 				p: p + 1
 			]
 		]
-		print lf
+		print ["^/    default format: "]
+		case [
+			adev/format = ASAMPLE-TYPE-F32 [
+				print-line "float32!"
+			]
+			adev/format = ASAMPLE-TYPE-I32 [
+				print-line "integer!"
+			]
+			adev/format = ASAMPLE-TYPE-I16 [
+				print-line "int16!"
+			]
+			true [
+				print-line "unknown"
+			]
+		]
+		print-line ["    default channels: " adev/channel]
+		print-line ["    default rate: " adev/rate]
 		;print-line ["    buffer frames: " buffer-size dev]
 		print-line "================================"
 	]
@@ -818,7 +870,7 @@ OS-audio: context [
 		adev/rates
 	]
 
-	sample-types: func [
+	sample-formats: func [
 		dev			[AUDIO-DEVICE!]
 		count		[int-ptr!]
 		return:		[int-ptr!]
@@ -834,8 +886,54 @@ OS-audio: context [
 	channels-count: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		0
+		adev: as ALSA-DEVICE! dev
+		adev/channel
+	]
+
+	set-channels-count: func [
+		dev			[AUDIO-DEVICE!]
+		chs			[integer!]
+		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
+			pcm		[integer!]
+			params	[integer!]
+			p		[int-ptr!]
+			name	[c-string!]
+			hr		[integer!]
+	][
+		adev: as ALSA-DEVICE! dev
+		if adev/running? [return false]
+		pcm: 0
+		params: 0
+		p: as int-ptr! adev/id
+		name: as c-string! p + 1
+		hr: snd_pcm_open :pcm name adev/type 0
+		if hr < 0 [return false]
+		hr: snd_pcm_hw_params_malloc :params
+		if hr < 0 [
+			snd_pcm_close pcm
+			return false
+		]
+		hr: snd_pcm_hw_params_any pcm params
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			snd_pcm_close pcm
+			return false
+		]
+		hr: snd_pcm_hw_params_set_channels pcm params chs
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			snd_pcm_close pcm
+			return false
+		]
+		adev/channel: chs
+		snd_pcm_hw_params_free params
+		snd_pcm_close pcm
+		true
 	]
 
 	buffer-size: func [
@@ -856,15 +954,123 @@ OS-audio: context [
 	sample-rate: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		0
+		adev: as ALSA-DEVICE! dev
+		adev/rate
 	]
 
 	set-sample-rate: func [
 		dev			[AUDIO-DEVICE!]
 		rate		[integer!]
 		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
+			pcm		[integer!]
+			params	[integer!]
+			p		[int-ptr!]
+			name	[c-string!]
+			hr		[integer!]
 	][
+		adev: as ALSA-DEVICE! dev
+		if adev/running? [return false]
+		pcm: 0
+		params: 0
+		p: as int-ptr! adev/id
+		name: as c-string! p + 1
+		hr: snd_pcm_open :pcm name adev/type 0
+		if hr < 0 [return false]
+		hr: snd_pcm_hw_params_malloc :params
+		if hr < 0 [
+			snd_pcm_close pcm
+			return false
+		]
+		hr: snd_pcm_hw_params_any pcm params
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			snd_pcm_close pcm
+			return false
+		]
+		hr: snd_pcm_hw_params_set_rate pcm params rate 0
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			snd_pcm_close pcm
+			return false
+		]
+		adev/rate: rate
+		snd_pcm_hw_params_free params
+		snd_pcm_close pcm
+		true
+	]
+
+	sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[AUDIO-SAMPLE-TYPE!]
+		/local
+			adev	[ALSA-DEVICE!]
+	][
+		adev: as ALSA-DEVICE! dev
+		adev/format
+	]
+
+	set-sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		type		[AUDIO-SAMPLE-TYPE!]
+		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
+			pcm		[integer!]
+			params	[integer!]
+			p		[int-ptr!]
+			name	[c-string!]
+			hr		[integer!]
+			format	[integer!]
+	][
+		adev: as ALSA-DEVICE! dev
+		if adev/running? [return false]
+		pcm: 0
+		params: 0
+		p: as int-ptr! adev/id
+		name: as c-string! p + 1
+		hr: snd_pcm_open :pcm name adev/type 0
+		if hr < 0 [return false]
+		hr: snd_pcm_hw_params_malloc :params
+		if hr < 0 [
+			snd_pcm_close pcm
+			return false
+		]
+		hr: snd_pcm_hw_params_any pcm params
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			snd_pcm_close pcm
+			return false
+		]
+		case [
+			type = ASAMPLE-TYPE-F32 [
+				format: SND_PCM_FORMAT_FLOAT_LE
+			]
+			type = ASAMPLE-TYPE-I32 [
+				format: SND_PCM_FORMAT_S32_LE
+			]
+			type = ASAMPLE-TYPE-I16 [
+				format: SND_PCM_FORMAT_S16_LE
+			]
+			true [
+				snd_pcm_hw_params_free params
+				snd_pcm_close pcm
+				return false
+			]
+		]
+		hr: snd_pcm_hw_params_set_format pcm params format
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			snd_pcm_close pcm
+			return false
+		]
+		adev/format: type
+		snd_pcm_hw_params_free params
+		snd_pcm_close pcm
 		true
 	]
 

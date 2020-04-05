@@ -160,11 +160,44 @@ audio-device: context [
 		OS-audio/name dev
 	]
 
+	channels: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+	][
+		OS-audio/channels dev count
+	]
+
+	rates: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+	][
+		OS-audio/rates dev count
+	]
+
+	sample-formats: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+	][
+		OS-audio/sample-formats dev count
+	]
+
+	;-- default channels: 2 > 1 > max
 	channels-count: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
 	][
 		OS-audio/channels-count dev
+	]
+
+	set-channels-count: func [
+		dev			[AUDIO-DEVICE!]
+		chs			[integer!]
+		return:		[logic!]
+	][
+		OS-audio/set-channels-count dev chs
 	]
 
 	buffer-size: func [
@@ -182,6 +215,7 @@ audio-device: context [
 		OS-audio/set-buffer-size dev size
 	]
 
+	;-- default rate: 44100 > max
 	sample-rate: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
@@ -195,6 +229,22 @@ audio-device: context [
 		return:		[logic!]
 	][
 		OS-audio/set-sample-rate dev rate
+	]
+
+	;-- default format: f32 > i32 > i16
+	sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[AUDIO-SAMPLE-TYPE!]
+	][
+		OS-audio/sample-format dev
+	]
+
+	set-sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		type		[AUDIO-SAMPLE-TYPE!]
+		return:		[logic!]
+	][
+		OS-audio/set-sample-format dev type
 	]
 
 	input?: func [
