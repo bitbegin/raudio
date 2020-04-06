@@ -366,7 +366,7 @@ OS-audio: context [
 		cli/value
 	]
 
-	init-fmt-with: func [
+	init-format-with: func [
 		fmt			[WAVEFORMATEXTENSIBLE!]
 		ctype		[CHANNEL-TYPE!]
 		rate		[integer!]
@@ -585,7 +585,7 @@ OS-audio: context [
 		set-memory as byte-ptr! formats #"^(00)" 4 * 4
 		dev/formats: formats
 		tf: 0
-		init-fmt-with ext dev/channel dev/rate ASAMPLE-TYPE-I16
+		init-format-with ext dev/channel dev/rate ASAMPLE-TYPE-I16
 		hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
 		if hr = 0 [
 			formats/1: ASAMPLE-TYPE-I16
@@ -594,7 +594,7 @@ OS-audio: context [
 		]
 		if tf <> 0 [CoTaskMemFree tf]
 		tf: 0
-		init-fmt-with ext dev/channel dev/rate ASAMPLE-TYPE-I32
+		init-format-with ext dev/channel dev/rate ASAMPLE-TYPE-I32
 		hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
 		if hr = 0 [
 			formats/1: ASAMPLE-TYPE-I32
@@ -603,7 +603,7 @@ OS-audio: context [
 		]
 		if tf <> 0 [CoTaskMemFree tf]
 		tf: 0
-		init-fmt-with ext dev/channel dev/rate ASAMPLE-TYPE-F32
+		init-format-with ext dev/channel dev/rate ASAMPLE-TYPE-F32
 		hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
 		if hr = 0 [
 			formats/1: ASAMPLE-TYPE-F32
@@ -625,7 +625,7 @@ OS-audio: context [
 		iter: AUDIO-SPEAKER-MONO
 		loop AUDIO-SPEAKER-LAST [
 			tf: 0
-			init-fmt-with ext iter dev/rate dev/format
+			init-format-with ext iter dev/rate dev/format
 			hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
 			if hr = 0 [
 				channels/1: iter
@@ -650,7 +650,7 @@ OS-audio: context [
 		dev/rates: rates
 		loop num [
 			tf: 0
-			init-fmt-with ext dev/channel frates/1 dev/format
+			init-format-with ext dev/channel frates/1 dev/format
 			hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
 			if hr = 0 [
 				rates/1: frates/1
