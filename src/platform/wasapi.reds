@@ -42,9 +42,48 @@ OS-audio: context [
 	;-- instance for device changed
 	dev-monitor: declare DEVICE-MONITOR!
 
-	#define DEVICE_STATE_ACTIVE		1
-	#define STGM_READ				0
-	#define CLSCTX_ALL				17h
+	#define DEVICE_STATE_ACTIVE			1
+	#define STGM_READ					0
+	#define CLSCTX_ALL					17h
+	#define WAVE_FORMAT_EXTENSIBLE		FFFEh
+	#define AUDCLNT_SHAREMODE_SHARED	0
+
+
+	;-- channels flag for wasapi
+	#define SPEAKER_FRONT_LEFT					00000001h
+	#define SPEAKER_FRONT_RIGHT					00000002h
+	#define SPEAKER_FRONT_CENTER				00000004h
+	#define SPEAKER_LOW_FREQUENCY				00000008h
+	#define SPEAKER_BACK_LEFT					00000010h
+	#define SPEAKER_BACK_RIGHT					00000020h
+	#define SPEAKER_FRONT_LEFT_OF_CENTER		00000040h
+	#define SPEAKER_FRONT_RIGHT_OF_CENTER		00000080h
+	#define SPEAKER_BACK_CENTER					00000100h
+	#define SPEAKER_SIDE_LEFT					00000200h
+	#define SPEAKER_SIDE_RIGHT					00000400h
+	#define SPEAKER_TOP_CENTER					00000800h
+	#define SPEAKER_TOP_FRONT_LEFT				00001000h
+	#define SPEAKER_TOP_FRONT_CENTER			00002000h
+	#define SPEAKER_TOP_FRONT_RIGHT				00004000h
+	#define SPEAKER_TOP_BACK_LEFT				00008000h
+	#define SPEAKER_TOP_BACK_CENTER				00010000h
+	#define SPEAKER_TOP_BACK_RIGHT				00020000h
+
+	#define KSAUDIO_SPEAKER_MONO				[SPEAKER_FRONT_CENTER]
+	#define KSAUDIO_SPEAKER_1POINT1				[SPEAKER_FRONT_CENTER + SPEAKER_LOW_FREQUENCY]
+	#define KSAUDIO_SPEAKER_STEREO				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT]
+	#define KSAUDIO_SPEAKER_2POINT1				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_LOW_FREQUENCY]
+	#define KSAUDIO_SPEAKER_3POINT0				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER]
+	#define KSAUDIO_SPEAKER_3POINT1				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_LOW_FREQUENCY]
+	#define KSAUDIO_SPEAKER_QUAD				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_BACK_LEFT + SPEAKER_BACK_RIGHT]
+	#define KSAUDIO_SPEAKER_SURROUND			[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_BACK_CENTER]
+	#define KSAUDIO_SPEAKER_5POINT0				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_SIDE_LEFT + SPEAKER_SIDE_RIGHT]
+	#define KSAUDIO_SPEAKER_5POINT1				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_LOW_FREQUENCY + SPEAKER_BACK_LEFT + SPEAKER_BACK_RIGHT]
+	#define KSAUDIO_SPEAKER_7POINT0				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_BACK_LEFT + SPEAKER_BACK_RIGHT + SPEAKER_SIDE_LEFT + SPEAKER_SIDE_RIGHT]
+	#define KSAUDIO_SPEAKER_7POINT1				[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_LOW_FREQUENCY + SPEAKER_BACK_LEFT + SPEAKER_BACK_RIGHT + SPEAKER_FRONT_LEFT_OF_CENTER + SPEAKER_FRONT_RIGHT_OF_CENTER]
+	#define KSAUDIO_SPEAKER_5POINT1_SURROUND	[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_LOW_FREQUENCY + SPEAKER_SIDE_LEFT  + SPEAKER_SIDE_RIGHT]
+	#define KSAUDIO_SPEAKER_7POINT1_SURROUND	[SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_LOW_FREQUENCY + SPEAKER_BACK_LEFT + SPEAKER_BACK_RIGHT + SPEAKER_SIDE_LEFT + SPEAKER_SIDE_RIGHT]
+
 
 	SECURITY_ATTRIBUTES!: alias struct! [
 		len			[integer!]
@@ -87,7 +126,7 @@ OS-audio: context [
 		rates-count		[integer!]
 		formats			[int-ptr!]						;-- support formats list
 		formats-count	[integer!]
-		channel			[integer!]						;-- default channels
+		channel			[CHANNEL-TYPE!]					;-- default channels
 		rate			[integer!]						;-- default rate
 		format			[AUDIO-SAMPLE-TYPE!]			;-- default format
 	]
@@ -191,7 +230,7 @@ OS-audio: context [
 		GetBufferSize				[function! [this [this!] pNumBufferFrames [int-ptr!] return: [integer!]]]
 		GetStreamLatency			[function! [this [this!] phnsLatency [REFERENCE_TIME!] return: [integer!]]]
 		GetCurrentPadding			[function! [this [this!] pNumPaddingFrames [int-ptr!] return: [integer!]]]
-		IsFormatSupported			[function! [this [this!] ShareMode [integer!] pFormat [int-ptr!] ppClosestMatch [int-ptr!] return: [integer!]]]
+		IsFormatSupported			[function! [this [this!] ShareMode [integer!] pFormat [WAVEFORMATEXTENSIBLE!] ppClosestMatch [int-ptr!] return: [integer!]]]
 		GetMixFormat				[function! [this [this!] ppDeviceFormat [int-ptr!] return: [integer!]]]
 		GetDevicePeriod				[function! [this [this!] phnsDefaultDevicePeriod [REFERENCE_TIME!] phnsMinimumDevicePeriod [REFERENCE_TIME!] return: [integer!]]]
 		Start						[function! [this [this!] return: [integer!]]]
@@ -239,6 +278,22 @@ OS-audio: context [
 		OnDeviceRemoved				[function! [this [this!] id [int-ptr!] return: [integer!]]]
 		OnDefaultDeviceChanged		[function! [this [this!] flow [integer!] role [integer!] id [int-ptr!] return: [integer!]]]
 		OnPropertyValueChanged		[function! [this [this!] id [int-ptr!] key [PROPERTYKEY! value] return: [integer!]]]
+	]
+
+	rates-filters: [
+		5512
+		8000
+		11025
+		16000
+		22050
+		32000
+		44100
+		48000
+		64000
+		88200
+		96000
+		176400
+		192000
 	]
 
 	init: func [return: [logic!]] [
@@ -311,30 +366,181 @@ OS-audio: context [
 		cli/value
 	]
 
-	init-mix-format: func [
-		cthis		[this!]
-		format		[WAVEFORMATEXTENSIBLE!]
-		return:		[logic!]
+	init-fmt-with: func [
+		fmt			[WAVEFORMATEXTENSIBLE!]
+		ctype		[CHANNEL-TYPE!]
+		rate		[integer!]
+		s-format	[AUDIO-SAMPLE-TYPE!]
 		/local
-			client	[IAudioClient]
-			hr		[integer!]
-			wf		[integer!]
+			chs		[integer!]
+			mask	[integer!]
+			bits	[integer!]
+			align	[integer!]
 	][
-		client: as IAudioClient cthis/vtbl
-		wf: 0
-		hr: client/GetMixFormat cthis :wf
-		if hr <> 0 [return false]
-		copy-memory as byte-ptr! format as byte-ptr! wf size? WAVEFORMATEXTENSIBLE!
-		CoTaskMemFree wf
-		true
+		chs: speaker-channels ctype
+		mask: to-channel-mask ctype
+		fmt/TagChannels: chs << 16 + WAVE_FORMAT_EXTENSIBLE
+		fmt/SamplesPerSec: rate
+		case [
+			s-format = ASAMPLE-TYPE-I16 [
+				copy-memory as byte-ptr! fmt/SubFormat as byte-ptr! KSDATAFORMAT_SUBTYPE_PCM size? GUID!
+				bits: 16
+			]
+			s-format = ASAMPLE-TYPE-I32 [
+				copy-memory as byte-ptr! fmt/SubFormat as byte-ptr! KSDATAFORMAT_SUBTYPE_PCM size? GUID!
+				bits: 32
+			]
+			s-format = ASAMPLE-TYPE-F32 [
+				copy-memory as byte-ptr! fmt/SubFormat as byte-ptr! KSDATAFORMAT_SUBTYPE_IEEE_FLOAT size? GUID!
+				bits: 32
+			]
+		]
+		align: chs * bits / 8
+		fmt/AlignBits: bits << 16 + align
+		fmt/AvgBytesPerSec: fmt/SamplesPerSec * chs * bits / 8
+		fmt/SizeSamples: bits << 16 + 22
+		fmt/ChannelMask: mask
+	]
+
+	to-channel-type: func [
+		mask		[integer!]
+		return:		[CHANNEL-TYPE!]
+		/local
+			temp	[integer!]
+	][
+		temp: KSAUDIO_SPEAKER_MONO
+		if temp = mask [return AUDIO-SPEAKER-MONO]
+		temp: KSAUDIO_SPEAKER_1POINT1
+		if temp = mask [return AUDIO-SPEAKER-1POINT1]
+		temp: KSAUDIO_SPEAKER_STEREO
+		if temp = mask [return AUDIO-SPEAKER-STEREO]
+		temp: KSAUDIO_SPEAKER_2POINT1
+		if temp = mask [return AUDIO-SPEAKER-2POINT1]
+		temp: KSAUDIO_SPEAKER_3POINT0
+		if temp = mask [return AUDIO-SPEAKER-3POINT0]
+		temp: KSAUDIO_SPEAKER_3POINT1
+		if temp = mask [return AUDIO-SPEAKER-3POINT1]
+		temp: KSAUDIO_SPEAKER_QUAD
+		if temp = mask [return AUDIO-SPEAKER-QUAD]
+		temp: KSAUDIO_SPEAKER_SURROUND
+		if temp = mask [return AUDIO-SPEAKER-SURROUND]
+		temp: KSAUDIO_SPEAKER_5POINT0
+		if temp = mask [return AUDIO-SPEAKER-5POINT0]
+		temp: KSAUDIO_SPEAKER_5POINT1
+		if temp = mask [return AUDIO-SPEAKER-5POINT1]
+		temp: KSAUDIO_SPEAKER_7POINT0
+		if temp = mask [return AUDIO-SPEAKER-7POINT0]
+		temp: KSAUDIO_SPEAKER_7POINT1
+		if temp = mask [return AUDIO-SPEAKER-7POINT1]
+		temp: KSAUDIO_SPEAKER_5POINT1_SURROUND
+		if temp = mask [return AUDIO-SPEAKER-5POINT1-SURROUND]
+		temp: KSAUDIO_SPEAKER_7POINT1_SURROUND
+		if temp = mask [return AUDIO-SPEAKER-7POINT1-SURROUND]
+		AUDIO-SPEAKER-LAST
+	]
+
+	to-channel-mask: func [
+		type		[CHANNEL-TYPE!]
+		return:		[integer!]
+		/local
+			temp	[integer!]
+	][
+		case [
+			type = AUDIO-SPEAKER-MONO [
+				temp: KSAUDIO_SPEAKER_MONO
+				return temp
+			]
+			type = AUDIO-SPEAKER-1POINT1 [
+				temp: KSAUDIO_SPEAKER_1POINT1
+				return temp
+			]
+			type = AUDIO-SPEAKER-STEREO [
+				temp: KSAUDIO_SPEAKER_STEREO
+				return temp
+			]
+			type = AUDIO-SPEAKER-2POINT1 [
+				temp: KSAUDIO_SPEAKER_2POINT1
+				return temp
+			]
+			type = AUDIO-SPEAKER-3POINT0 [
+				temp: KSAUDIO_SPEAKER_3POINT0
+				return temp
+			]
+			type = AUDIO-SPEAKER-3POINT1 [
+				temp: KSAUDIO_SPEAKER_3POINT1
+				return temp
+			]
+			type = AUDIO-SPEAKER-QUAD [
+				temp: KSAUDIO_SPEAKER_QUAD
+				return temp
+			]
+			type = AUDIO-SPEAKER-SURROUND [
+				temp: KSAUDIO_SPEAKER_SURROUND
+				return temp
+			]
+			type = AUDIO-SPEAKER-5POINT0 [
+				temp: KSAUDIO_SPEAKER_5POINT0
+				return temp
+			]
+			type = AUDIO-SPEAKER-5POINT1 [
+				temp: KSAUDIO_SPEAKER_5POINT1
+				return temp
+			]
+			type = AUDIO-SPEAKER-7POINT0 [
+				temp: KSAUDIO_SPEAKER_7POINT0
+				return temp
+			]
+			type = AUDIO-SPEAKER-7POINT1 [
+				temp: KSAUDIO_SPEAKER_7POINT1
+				return temp
+			]
+			type = AUDIO-SPEAKER-5POINT1-SURROUND [
+				temp: KSAUDIO_SPEAKER_5POINT1_SURROUND
+				return temp
+			]
+			type = AUDIO-SPEAKER-7POINT1-SURROUND [
+				temp: KSAUDIO_SPEAKER_7POINT1_SURROUND
+				return temp
+			]
+		]
+	]
+
+	dump-format: func [
+		fmt			[WAVEFORMATEXTENSIBLE!]
+	][
+		print-line ["    tag: " as int-ptr! fmt/TagChannels and FFFFh]
+		print-line ["    channels: " as int-ptr! fmt/TagChannels >>> 16]
+		print-line ["    rate: " fmt/SamplesPerSec]
+		print-line ["    bytes: " as int-ptr! fmt/AvgBytesPerSec]
+		print-line ["    bits: " fmt/AlignBits >>> 16]
+		print-line ["    align: " fmt/AlignBits and FFFFh]
+		print-line ["    cbsize: " fmt/SizeSamples and FFFFh]
+		print-line ["    Samples: " fmt/SizeSamples >>> 16]
+		print-line ["    mask: " as int-ptr! fmt/ChannelMask]
+		print-line ["    guid: " as int-ptr! fmt/SubFormat/guid1 " " as int-ptr! fmt/SubFormat/guid2 " " as int-ptr! fmt/SubFormat/guid3 " " as int-ptr! fmt/SubFormat/guid4]
 	]
 
 	init-device: func [
 		dev			[WASAPI-DEVICE!]
 		dthis		[this!]
 		type		[AUDIO-DEVICE-TYPE!]
+		return:		[logic!]
 		/local
-			pdev	[IMMDevice]
+			pdev		[IMMDevice]
+			client		[IAudioClient]
+			hr			[integer!]
+			wf			[integer!]
+			fmt			[WAVEFORMATEXTENSIBLE!]
+			bits		[integer!]
+			ext			[WAVEFORMATEXTENSIBLE! value]
+			formats		[int-ptr!]
+			tf			[integer!]
+			count		[integer!]
+			channels	[int-ptr!]
+			iter		[CHANNEL-TYPE!]
+			rates		[int-ptr!]
+			num			[integer!]
+			frates		[int-ptr!]
 	][
 		set-memory as byte-ptr! dev #"^(00)" size? WASAPI-DEVICE!
 		pdev: as IMMDevice dthis/vtbl
@@ -344,15 +550,130 @@ OS-audio: context [
 		dev/name: get-device-name dthis pdev
 		dev/client: get-client dthis pdev
 		dev/running?: no
-		unless null? dev/client [
-			init-mix-format dev/client dev/mix-format
+		if null? dev/client [return false]
+		client: as IAudioClient dev/client/vtbl
+		wf: 0
+		hr: client/GetMixFormat dev/client :wf
+		if hr <> 0 [return false]
+		fmt: as WAVEFORMATEXTENSIBLE! wf
+		dev/channel: to-channel-type fmt/ChannelMask
+		dev/rate: fmt/SamplesPerSec
+		either 0 = compare-memory as byte-ptr! fmt/SubFormat as byte-ptr! KSDATAFORMAT_SUBTYPE_IEEE_FLOAT size? GUID! [
+			dev/format: ASAMPLE-TYPE-F32
+		][
+			either 0 = compare-memory as byte-ptr! fmt/SubFormat as byte-ptr! KSDATAFORMAT_SUBTYPE_PCM size? GUID! [
+				bits: fmt/AlignBits >>> 16
+				case [
+					bits = 16 [
+						dev/format: ASAMPLE-TYPE-I16
+					]
+					bits = 32 [
+						dev/format: ASAMPLE-TYPE-I32
+					]
+					true [
+						dev/format: -1
+					]
+				]
+			][
+				dev/format: -1
+			]
 		]
+		CoTaskMemFree wf
+		;-- get formats
+		count: 0
+		formats: as int-ptr! allocate 4 * 4
+		set-memory as byte-ptr! formats #"^(00)" 4 * 4
+		dev/formats: formats
+		tf: 0
+		init-fmt-with ext dev/channel dev/rate ASAMPLE-TYPE-I16
+		hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+		if hr = 0 [
+			formats/1: ASAMPLE-TYPE-I16
+			formats: formats + 1
+			count: count + 1
+		]
+		if tf <> 0 [CoTaskMemFree tf]
+		tf: 0
+		init-fmt-with ext dev/channel dev/rate ASAMPLE-TYPE-I32
+		hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+		if hr = 0 [
+			formats/1: ASAMPLE-TYPE-I32
+			formats: formats + 1
+			count: count + 1
+		]
+		if tf <> 0 [CoTaskMemFree tf]
+		tf: 0
+		init-fmt-with ext dev/channel dev/rate ASAMPLE-TYPE-F32
+		hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+		if hr = 0 [
+			formats/1: ASAMPLE-TYPE-F32
+			formats: formats + 1
+			count: count + 1
+		]
+		if tf <> 0 [CoTaskMemFree tf]
+		if count = 0 [
+			free as byte-ptr! dev/formats
+			dev/formats: null
+			return false
+		]
+		dev/formats-count: count
+		;-- get channels
+		count: 0
+		channels: as int-ptr! allocate AUDIO-SPEAKER-LAST + 1 * 4
+		set-memory as byte-ptr! channels #"^(00)" AUDIO-SPEAKER-LAST + 1 * 4
+		dev/channels: channels
+		iter: AUDIO-SPEAKER-MONO
+		loop AUDIO-SPEAKER-LAST [
+			tf: 0
+			init-fmt-with ext iter dev/rate dev/format
+			hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+			if hr = 0 [
+				channels/1: iter
+				channels: channels + 1
+				count: count + 1
+			]
+			if tf <> 0 [CoTaskMemFree tf]
+			iter: iter + 1
+		]
+		if count = 0 [
+			free as byte-ptr! dev/channels
+			dev/channels: null
+			return false
+		]
+		dev/channels-count: count
+		;-- get rates
+		num: size? rates-filters
+		frates: rates-filters
+		count: 0
+		rates: as int-ptr! allocate num + 1 * 4
+		set-memory as byte-ptr! rates #"^(00)" num + 1 * 4
+		dev/rates: rates
+		loop num [
+			tf: 0
+			init-fmt-with ext dev/channel frates/1 dev/format
+			hr: client/IsFormatSupported dev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+			if hr = 0 [
+				rates/1: frates/1
+				rates: rates + 1
+				count: count + 1
+			]
+			if tf <> 0 [CoTaskMemFree tf]
+			frates: frates + 1
+		]
+		if count = 0 [
+			free as byte-ptr! dev/rates
+			dev/rates: null
+			return false
+		]
+		dev/rates-count: count
+		true
 	]
 
 	dump-device: func [
 		dev			[AUDIO-DEVICE!]
 		/local
 			wdev	[WASAPI-DEVICE!]
+			p		[int-ptr!]
 	][
 		if null? dev [print-line "null device!" exit]
 		wdev: as WASAPI-DEVICE! dev
@@ -367,8 +688,67 @@ OS-audio: context [
 		type-string/uprint wdev/id
 		print "^/    name: "
 		type-string/uprint wdev/name
-		print-line ["^/    channels: " wdev/mix-format/TagChannels >>> 16]
-		print-line ["    sample rate: " wdev/mix-format/SamplesPerSec]
+		print "^/    formats: "
+		either null? wdev/formats [
+			print "none"
+		][
+			p: wdev/formats
+			loop wdev/formats-count [
+				case [
+					p/1 = ASAMPLE-TYPE-F32 [
+						print "float32! "
+					]
+					p/1 = ASAMPLE-TYPE-I32 [
+						print "integer! "
+					]
+					p/1 = ASAMPLE-TYPE-I16 [
+						print "int16! "
+					]
+					true [
+						print "unknown "
+					]
+				]
+				p: p + 1
+			]
+		]
+		print "^/    channels: "
+		either null? wdev/channels [
+			print "none"
+		][
+			p: wdev/channels
+			loop wdev/channels-count [
+				print [p/1 " "]
+				p: p + 1
+			]
+		]
+		print "^/    rates: "
+		either null? wdev/rates [
+			print "none"
+		][
+			p: wdev/rates
+			loop wdev/rates-count [
+				print [p/1 " "]
+				p: p + 1
+			]
+		]
+		print ["^/    default format: "]
+		case [
+			wdev/format = ASAMPLE-TYPE-F32 [
+				print-line "float32!"
+			]
+			wdev/format = ASAMPLE-TYPE-I32 [
+				print-line "integer!"
+			]
+			wdev/format = ASAMPLE-TYPE-I16 [
+				print-line "int16!"
+			]
+			true [
+				print-line "unknown"
+			]
+		]
+		print-line ["    default channels: " wdev/channel]
+		print-line ["    default rate: " wdev/rate]
+		print-line ["    default format: " wdev/format]
 		print-line ["    buffer frames: " wdev/buffer-size]
 		print-line "================================"
 	]
@@ -671,16 +1051,22 @@ OS-audio: context [
 		wdev/formats
 	]
 
-	channels-count: func [
+	channels-type: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[integer!]
+		return:		[CHANNEL-TYPE!]
 		/local
 			wdev	[WASAPI-DEVICE!]
-			ret		[integer!]
 	][
 		wdev: as WASAPI-DEVICE! dev
-		ret: wdev/mix-format/TagChannels >>> 16
-		ret
+		wdev/channel
+	]
+
+	set-channels-type: func [
+		dev			[AUDIO-DEVICE!]
+		type		[CHANNEL-TYPE!]
+		return:		[logic!]
+	][
+		true
 	]
 
 	buffer-size: func [
@@ -742,6 +1128,21 @@ OS-audio: context [
 		true
 	]
 
+	sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[AUDIO-SAMPLE-TYPE!]
+	][
+		0
+	]
+
+	set-sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		type		[AUDIO-SAMPLE-TYPE!]
+		return:		[logic!]
+	][
+		true
+	]
+
 	input?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
@@ -793,7 +1194,7 @@ OS-audio: context [
 
 	connect: func [
 		dev			[AUDIO-DEVICE!]
-		stype		[AUDIO-SAMPLE-TYPE!]
+		;stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
 		return:		[logic!]
 		/local
@@ -804,24 +1205,24 @@ OS-audio: context [
 		wdev: as WASAPI-DEVICE! dev
 		if wdev/running? [return false]
 		format: wdev/mix-format
-		wdev/format: stype
-		case [
+		;wdev/format: stype
+		;case [
 			;-- float
-			stype = ASAMPLE-TYPE-F32 [
-				copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
-				bits: 32
-			]
+		;	stype = ASAMPLE-TYPE-F32 [
+		;		copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+		;		bits: 32
+		;	]
 			;-- int32
-			stype = ASAMPLE-TYPE-I32 [
-				copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
+		;	stype = ASAMPLE-TYPE-I32 [
+		;		copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
 				bits: 32
-			]
+		;	]
 			;-- int16
-			stype = ASAMPLE-TYPE-I16 [
-				copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
-				bits: 16
-			]
-		]
+		;	stype = ASAMPLE-TYPE-I16 [
+		;		copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
+		;		bits: 16
+		;	]
+		;]
 
 		format/AlignBits: format/AlignBits and 0000FFFFh
 		format/AlignBits: format/AlignBits + (bits << 16)

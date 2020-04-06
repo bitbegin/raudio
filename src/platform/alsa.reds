@@ -552,6 +552,7 @@ OS-audio: context [
 		]
 		print-line ["    default channels: " adev/channel]
 		print-line ["    default rate: " adev/rate]
+		print-line ["    default format: " adev/format]
 		;print-line ["    buffer frames: " buffer-size dev]
 		print-line "================================"
 	]

@@ -21,6 +21,25 @@ Red/System []
 	DEFAULT-OUTPUT-CHANGED
 ]
 
+#enum CHANNEL-TYPE! [
+	AUDIO-SPEAKER-MONO: 0
+	AUDIO-SPEAKER-1POINT1
+	AUDIO-SPEAKER-STEREO
+	AUDIO-SPEAKER-2POINT1
+	AUDIO-SPEAKER-3POINT0
+	AUDIO-SPEAKER-3POINT1
+	AUDIO-SPEAKER-QUAD
+	AUDIO-SPEAKER-SURROUND
+	AUDIO-SPEAKER-5POINT0
+	AUDIO-SPEAKER-5POINT1
+	AUDIO-SPEAKER-7POINT0
+	AUDIO-SPEAKER-7POINT1
+	AUDIO-SPEAKER-5POINT1-SURROUND
+	AUDIO-SPEAKER-7POINT1-SURROUND
+	AUDIO-SPEAKER-LAST
+]
+
+;-- support 16 channels for now
 AUDIO-CHANNELS!: alias struct! [
 	ch0				[int-ptr!]
 	ch1				[int-ptr!]
@@ -72,6 +91,28 @@ AUDIO-CHANGED-CALLBACK!: alias function! []
 	FreeBSD  [#include %platform/pulse-audio.reds]
 	Syllable [#include %platform/null.reds]
 	#default [#include %platform/null.reds]
+]
+
+speaker-channels: func [
+	type		[CHANNEL-TYPE!]
+	return:		[integer!]
+][
+	case [
+		type = AUDIO-SPEAKER-MONO					[1]
+		type = AUDIO-SPEAKER-1POINT1				[2]
+		type = AUDIO-SPEAKER-STEREO					[2]
+		type = AUDIO-SPEAKER-2POINT1				[3]
+		type = AUDIO-SPEAKER-3POINT0				[3]
+		type = AUDIO-SPEAKER-3POINT1				[4]
+		type = AUDIO-SPEAKER-QUAD					[4]
+		type = AUDIO-SPEAKER-SURROUND				[4]
+		type = AUDIO-SPEAKER-5POINT0				[5]
+		type = AUDIO-SPEAKER-5POINT1				[6]
+		type = AUDIO-SPEAKER-7POINT0				[7]
+		type = AUDIO-SPEAKER-7POINT1				[8]
+		type = AUDIO-SPEAKER-5POINT1-SURROUND		[6]
+		type = AUDIO-SPEAKER-7POINT1-SURROUND		[8]
+	]
 ]
 
 audio: context [
@@ -185,19 +226,19 @@ audio-device: context [
 	]
 
 	;-- default channels: 2 > 1 > max
-	channels-count: func [
+	channels-type: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[integer!]
+		return:		[CHANNEL-TYPE!]
 	][
-		OS-audio/channels-count dev
+		OS-audio/channels-type dev
 	]
 
-	set-channels-count: func [
+	set-channels-type: func [
 		dev			[AUDIO-DEVICE!]
-		chs			[integer!]
+		type		[CHANNEL-TYPE!]
 		return:		[logic!]
 	][
-		OS-audio/set-channels-count dev chs
+		OS-audio/set-channels-type dev type
 	]
 
 	buffer-size: func [
