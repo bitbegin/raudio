@@ -246,6 +246,12 @@ OS-audio: context [
 				dir			[int-ptr!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_get_period_size: "__snd_pcm_hw_params_get_period_size" [
+				params		[integer!]
+				val			[int-ptr!]
+				dir			[int-ptr!]
+				return:		[integer!]
+			]
 			snd_pcm_hw_params: "snd_pcm_hw_params" [
 				pcm			[integer!]
 				params		[integer!]
@@ -261,7 +267,7 @@ OS-audio: context [
 	#define SND_PCM_FORMAT_S32_LE				10
 	#define SND_PCM_FORMAT_FLOAT_LE				14
 	#define SND_PCM_ACCESS_RW_INTERLEAVED		3
-	#define DEFAULT_BUFFER_SIZE					1024
+	#define DEFAULT_BUFFER_SIZE					2048
 
 	ALSA-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
