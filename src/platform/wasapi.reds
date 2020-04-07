@@ -519,6 +519,9 @@ OS-audio: context [
 		print-line ["    guid: " as int-ptr! fmt/SubFormat/guid1 " " as int-ptr! fmt/SubFormat/guid2 " " as int-ptr! fmt/SubFormat/guid3 " " as int-ptr! fmt/SubFormat/guid4]
 	]
 
+	#define DURATION-UNIT	10'000'000.0
+	;-- set the duration time (0.1us), time per buffer size
+	;-- buffer size = frames * count
 	init-client-with: func [
 		this			[this!]
 		client			[IAudioClient]
@@ -537,7 +540,7 @@ OS-audio: context [
 		period/high: 0
 		buf-time/low: 0
 		buf-time/high: 0
-		ft: 10'000'000.0
+		ft: DURATION-UNIT
 		ft: ft * as float! buffer-count
 		ft: ft / as float! rate
 		buf-time/high: as integer! ft / 4294967296.0
