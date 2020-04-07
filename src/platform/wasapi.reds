@@ -112,7 +112,6 @@ OS-audio: context [
 		id				[unicode-string!]				;-- unicode format
 		name			[unicode-string!]				;-- unicode format
 		client			[this!]
-		mix-format		[WAVEFORMATEXTENSIBLE! value]
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
@@ -520,11 +519,40 @@ OS-audio: context [
 		print-line ["    guid: " as int-ptr! fmt/SubFormat/guid1 " " as int-ptr! fmt/SubFormat/guid2 " " as int-ptr! fmt/SubFormat/guid3 " " as int-ptr! fmt/SubFormat/guid4]
 	]
 
+	init-client-with: func [
+		this			[this!]
+		client			[IAudioClient]
+		buffer-count	[integer!]
+		rate			[integer!]
+		format			[WAVEFORMATEXTENSIBLE!]
+		return:			[logic!]
+		/local
+			period		[REFERENCE_TIME! value]
+			buf-time	[REFERENCE_TIME! value]
+			ft			[float!]
+			ft2			[float!]
+			hr			[integer!]
+	][
+		period/low: 0
+		period/high: 0
+		buf-time/low: 0
+		buf-time/high: 0
+		ft: 10'000'000.0
+		ft: ft * as float! buffer-count
+		ft: ft / as float! rate
+		buf-time/high: as integer! ft / 4294967296.0
+		ft2: (as float! buf-time/high) * 4294967296.0
+		buf-time/low: as integer! ft - ft2
+		hr: client/Initialize this 0 00140000h buf-time period format null
+		if hr <> 0 [return false]
+		true
+	]
+
 	init-device: func [
-		dev			[WASAPI-DEVICE!]
-		dthis		[this!]
-		type		[AUDIO-DEVICE-TYPE!]
-		return:		[logic!]
+		dev				[WASAPI-DEVICE!]
+		dthis			[this!]
+		type			[AUDIO-DEVICE-TYPE!]
+		return:			[logic!]
 		/local
 			pdev		[IMMDevice]
 			client		[IAudioClient]
@@ -666,6 +694,9 @@ OS-audio: context [
 			return false
 		]
 		dev/rates-count: count
+		init-format-with ext dev/channel dev/rate dev/format
+		init-client-with dev/client client dev/buffer-size dev/rate ext
+		hr: client/GetBufferSize dev/client :dev/buffer-size
 		true
 	]
 
@@ -1065,7 +1096,22 @@ OS-audio: context [
 		dev			[AUDIO-DEVICE!]
 		type		[CHANNEL-TYPE!]
 		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+			client	[IAudioClient]
+			tf		[integer!]
+			ext		[WAVEFORMATEXTENSIBLE! value]
+			hr		[integer!]
 	][
+		wdev: as WASAPI-DEVICE! dev
+		if wdev/running? [return false]
+		client: as IAudioClient wdev/client/vtbl
+		tf: 0
+		init-format-with ext type wdev/rate wdev/format
+		hr: client/IsFormatSupported wdev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+		if tf <> 0 [CoTaskMemFree tf]
+		if hr <> 0 [return false]
+		wdev/channel: type
 		true
 	]
 
@@ -1087,22 +1133,9 @@ OS-audio: context [
 			wdev	[WASAPI-DEVICE!]
 	][
 		wdev: as WASAPI-DEVICE! dev
+		if wdev/running? [return false]
 		wdev/buffer-size: count
 		true
-	]
-
-	fixup-mix-format: func [
-		format		[WAVEFORMATEXTENSIBLE!]
-		/local
-			ch		[integer!]
-			bits	[integer!]
-			align	[integer!]
-	][
-		ch: format/TagChannels >>> 16
-		bits: format/AlignBits >>> 16
-		align: ch * bits / 8
-		format/AlignBits: format/AlignBits and FFFF0000h + align
-		format/AvgBytesPerSec: format/SamplesPerSec * ch * bits / 8
 	]
 
 	sample-rate: func [
@@ -1112,7 +1145,7 @@ OS-audio: context [
 			wdev	[WASAPI-DEVICE!]
 	][
 		wdev: as WASAPI-DEVICE! dev
-		wdev/mix-format/SamplesPerSec
+		wdev/rate
 	]
 
 	set-sample-rate: func [
@@ -1121,25 +1154,53 @@ OS-audio: context [
 		return:		[logic!]
 		/local
 			wdev	[WASAPI-DEVICE!]
+			client	[IAudioClient]
+			tf		[integer!]
+			ext		[WAVEFORMATEXTENSIBLE! value]
+			hr		[integer!]
 	][
 		wdev: as WASAPI-DEVICE! dev
-		wdev/mix-format/SamplesPerSec: rate
-		fixup-mix-format wdev/mix-format
+		if wdev/running? [return false]
+		client: as IAudioClient wdev/client/vtbl
+		tf: 0
+		init-format-with ext wdev/channel rate wdev/format
+		hr: client/IsFormatSupported wdev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+		if tf <> 0 [CoTaskMemFree tf]
+		if hr <> 0 [return false]
+		wdev/rate: rate
 		true
 	]
 
 	sample-format: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[AUDIO-SAMPLE-TYPE!]
+		/local
+			wdev	[WASAPI-DEVICE!]
 	][
-		0
+		wdev: as WASAPI-DEVICE! dev
+		wdev/format
 	]
 
 	set-sample-format: func [
 		dev			[AUDIO-DEVICE!]
 		type		[AUDIO-SAMPLE-TYPE!]
 		return:		[logic!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+			client	[IAudioClient]
+			tf		[integer!]
+			ext		[WAVEFORMATEXTENSIBLE! value]
+			hr		[integer!]
 	][
+		wdev: as WASAPI-DEVICE! dev
+		if wdev/running? [return false]
+		client: as IAudioClient wdev/client/vtbl
+		tf: 0
+		init-format-with ext wdev/channel wdev/rate type
+		hr: client/IsFormatSupported wdev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+		if tf <> 0 [CoTaskMemFree tf]
+		if hr <> 0 [return false]
+		wdev/format: type
 		true
 	]
 
@@ -1194,39 +1255,28 @@ OS-audio: context [
 
 	connect: func [
 		dev			[AUDIO-DEVICE!]
-		;stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
 		return:		[logic!]
 		/local
 			wdev	[WASAPI-DEVICE!]
-			format	[WAVEFORMATEXTENSIBLE!]
-			bits	[integer!]
+			client	[IAudioClient]
+			tf		[integer!]
+			ext		[WAVEFORMATEXTENSIBLE! value]
+			hr		[integer!]
 	][
 		wdev: as WASAPI-DEVICE! dev
 		if wdev/running? [return false]
-		format: wdev/mix-format
-		;wdev/format: stype
-		;case [
-			;-- float
-		;	stype = ASAMPLE-TYPE-F32 [
-		;		copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
-		;		bits: 32
-		;	]
-			;-- int32
-		;	stype = ASAMPLE-TYPE-I32 [
-		;		copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
-				bits: 32
-		;	]
-			;-- int16
-		;	stype = ASAMPLE-TYPE-I16 [
-		;		copy-guid format/SubFormat as GUID! KSDATAFORMAT_SUBTYPE_PCM
-		;		bits: 16
-		;	]
-		;]
-
-		format/AlignBits: format/AlignBits and 0000FFFFh
-		format/AlignBits: format/AlignBits + (bits << 16)
-		fixup-mix-format format
+		client: as IAudioClient wdev/client/vtbl
+		;-- check the config is ok
+		tf: 0
+		init-format-with ext wdev/channel wdev/rate wdev/format
+		hr: client/IsFormatSupported wdev/client AUDCLNT_SHAREMODE_SHARED :ext :tf
+		if tf <> 0 [CoTaskMemFree tf]
+		if hr <> 0 [return false]
+		;-- init
+		unless init-client-with wdev/client client wdev/buffer-size wdev/rate ext [
+			return false
+		]
 		wdev/io-cb: io-cb
 		true
 	]
@@ -1268,7 +1318,7 @@ OS-audio: context [
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
 			abuff/buffer/sample-type: wdev/format
 			abuff/buffer/frames-count: num
-			temp: wdev/mix-format/TagChannels >>> 16
+			temp: speaker-channels wdev/channel
 			abuff/buffer/channels-count: temp
 			abuff/buffer/stride: temp
 			abuff/buffer/contiguous?: yes
@@ -1298,7 +1348,7 @@ OS-audio: context [
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
 			abuff/buffer/sample-type: wdev/format
 			abuff/buffer/frames-count: next-size
-			temp: wdev/mix-format/TagChannels >>> 16
+			temp: speaker-channels wdev/channel
 			abuff/buffer/channels-count: temp
 			abuff/buffer/stride: temp
 			abuff/buffer/contiguous?: yes
@@ -1339,10 +1389,6 @@ OS-audio: context [
 		return:		[logic!]
 		/local
 			wdev		[WASAPI-DEVICE!]
-			period		[REFERENCE_TIME! value]
-			ft			[float!]
-			ft2			[float!]
-			buf-time	[REFERENCE_TIME! value]
 			pclient		[IAudioClient]
 			hr			[integer!]
 			service		[com-ptr! value]
@@ -1354,19 +1400,7 @@ OS-audio: context [
 		if wdev/running? [return true]
 		wdev/event: CreateEvent null no no null
 		if null? wdev/event [return false]
-		period/low: 0
-		period/high: 0
-		buf-time/low: 0
-		buf-time/high: 0
-		ft: 10'000'000.0
-		ft: ft * as float! wdev/buffer-size
-		ft: ft / as float! wdev/mix-format/SamplesPerSec
-		buf-time/high: as integer! ft / 4294967296.0
-		ft2: (as float! buf-time/high) * 4294967296.0
-		buf-time/low: as integer! ft - ft2
 		pclient: as IAudioClient wdev/client/vtbl
-		hr: pclient/Initialize wdev/client 0 00140000h buf-time period wdev/mix-format null
-		if hr <> 0 [return false]
 		p: either wdev/type = ADEVICE-TYPE-OUTPUT [IID_IAudioRenderClient][IID_IAudioCaptureClient]
 		hr: pclient/GetService wdev/client p :service
 		if hr = 0 [
