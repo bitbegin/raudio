@@ -217,6 +217,28 @@ OS-audio: context [
 				dir			[integer!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_get_buffer_size: "__snd_pcm_hw_params_get_buffer_size" [
+				params		[integer!]
+				val			[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_set_buffer_size: "snd_pcm_hw_params_set_buffer_size" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_set_access: "snd_pcm_hw_params_set_access" [
+				pcm			[integer!]
+				params		[integer!]
+				access		[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_get_access: "__snd_pcm_hw_params_get_access" [
+				params		[integer!]
+				val			[int-ptr!]
+				return:		[integer!]
+			]
 			snd_pcm_hw_params: "snd_pcm_hw_params" [
 				pcm			[integer!]
 				params		[integer!]
@@ -228,9 +250,10 @@ OS-audio: context [
 		]
 	]
 
-	#define SND_PCM_FORMAT_S16_LE		2
-	#define SND_PCM_FORMAT_S32_LE		10
-	#define SND_PCM_FORMAT_FLOAT_LE		14
+	#define SND_PCM_FORMAT_S16_LE				2
+	#define SND_PCM_FORMAT_S32_LE				10
+	#define SND_PCM_FORMAT_FLOAT_LE				14
+	#define SND_PCM_ACCESS_RW_INTERLEAVED		3
 
 	ALSA-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
@@ -293,6 +316,23 @@ OS-audio: context [
 		0
 	]
 
+	to-params-format: func [
+		format			[AUDIO-SAMPLE-TYPE!]
+		return:			[integer!]
+	][
+		case [
+			format = ASAMPLE-TYPE-F32 [
+				SND_PCM_FORMAT_FLOAT_LE
+			]
+			format = ASAMPLE-TYPE-I32 [
+				SND_PCM_FORMAT_S32_LE
+			]
+			format = ASAMPLE-TYPE-I16 [
+				SND_PCM_FORMAT_S16_LE
+			]
+		]
+	]
+
 	init-device: func [
 		adev			[ALSA-DEVICE!]
 		pcm				[integer!]
@@ -300,8 +340,6 @@ OS-audio: context [
 		/local
 			params		[integer!]
 			hr			[integer!]
-			p			[int-ptr!]
-			id			[c-string!]
 			formats		[int-ptr!]
 			count		[integer!]
 			min			[integer!]
@@ -320,8 +358,6 @@ OS-audio: context [
 		params: 0
 		hr: snd_pcm_hw_params_malloc :params
 		if hr < 0 [return false]
-		p: as int-ptr! adev/id
-		id: as c-string! p + 1
 		hr: snd_pcm_hw_params_any pcm params
 		if hr < 0 [
 			snd_pcm_hw_params_free params
@@ -1032,7 +1068,6 @@ OS-audio: context [
 			p		[int-ptr!]
 			name	[c-string!]
 			hr		[integer!]
-			format	[integer!]
 	][
 		adev: as ALSA-DEVICE! dev
 		if adev/running? [return false]
@@ -1053,23 +1088,7 @@ OS-audio: context [
 			snd_pcm_close pcm
 			return false
 		]
-		case [
-			type = ASAMPLE-TYPE-F32 [
-				format: SND_PCM_FORMAT_FLOAT_LE
-			]
-			type = ASAMPLE-TYPE-I32 [
-				format: SND_PCM_FORMAT_S32_LE
-			]
-			type = ASAMPLE-TYPE-I16 [
-				format: SND_PCM_FORMAT_S16_LE
-			]
-			true [
-				snd_pcm_hw_params_free params
-				snd_pcm_close pcm
-				return false
-			]
-		]
-		hr: snd_pcm_hw_params_set_format pcm params format
+		hr: snd_pcm_hw_params_set_format pcm params to-params-format type
 		if hr < 0 [
 			snd_pcm_hw_params_free params
 			snd_pcm_close pcm
@@ -1118,33 +1137,73 @@ OS-audio: context [
 		no
 	]
 
+	set-hw-params: func [
+		adev		[ALSA-DEVICE!]
+		pcm			[integer!]
+		return:		[logic!]
+		/local
+			params	[integer!]
+			hr		[integer!]
+			size	[integer!]
+	][
+		params: 0
+		hr: snd_pcm_hw_params_malloc :params
+		if hr < 0 [return false]
+		hr: snd_pcm_hw_params_any pcm params
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		hr: snd_pcm_hw_params_set_access pcm params SND_PCM_ACCESS_RW_INTERLEAVED
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		hr: snd_pcm_hw_params_set_format pcm params to-params-format adev/format
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		hr: snd_pcm_hw_params_set_channels pcm params speaker-channels adev/channel
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		hr: snd_pcm_hw_params_set_rate pcm params adev/rate 0
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		hr: snd_pcm_hw_params pcm params
+		;size: 0
+		;hr: snd_pcm_hw_params_get_buffer_size params :size
+		;print-line [hr " " size]
+		snd_pcm_hw_params_free params
+		true
+	]
+
 	connect: func [
 		dev			[AUDIO-DEVICE!]
 		io-cb		[int-ptr!]
 		return:		[logic!]
 		/local
 			adev	[ALSA-DEVICE!]
-			format	[integer!]
 			p		[int-ptr!]
 			id		[c-string!]
+			pcm		[integer!]
 			hr		[integer!]
+			ret		[logic!]
 	][
 		adev: as ALSA-DEVICE! dev
 		if adev/running? [return false]
 		p: as int-ptr! adev/id
 		id: as c-string! p + 1
-		hr: snd_pcm_open :adev/pcm id adev/type 0
+		pcm: 0
+		hr: snd_pcm_open :pcm id adev/type 0
 		if hr <> 0 [return false]
-		;hr: snd_pcm_hw_params_test_format adev/pcm adev/params format
-		;if hr <> 0 [
-		;	snd_pcm_close adev/pcm
-		;	return false
-		;]
-		;snd_pcm_close adev/pcm
-		;format: 0
-		;hr: snd_pcm_hw_params_get_channels adev/params :format
-		;print-line [hr " " format]
-		true
+		ret: set-hw-params adev pcm
+		snd_pcm_close pcm
+		ret
 	]
 
 	start: func [
