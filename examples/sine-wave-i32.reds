@@ -46,12 +46,21 @@ wave-cb: func [
 print-line "wave test:"
 dev: audio/default-output-device
 audio/dump-device dev
+res: false
+res: audio-device/set-sample-format dev ASAMPLE-TYPE-I32
+print-line ["set format integer!: " res]
+res: audio-device/set-channels-type dev AUDIO-SPEAKER-STEREO
+print-line ["set channels stereo: " res]
+print-line ["new config: "]
+audio/dump-device dev
 rate: as float! audio-device/sample-rate dev
 delta: freq * pi / rate
-if audio-device/connect dev ASAMPLE-TYPE-I32 as int-ptr! :wave-cb [
-	audio-device/start dev null null
-	sleep 5 * 1000
-]
+res: audio-device/connect dev as int-ptr! :wave-cb
+print-line ["connect: " res]
+res: audio-device/start dev null null
+print-line ["start: " res]
+print-line "now speak 5 second ..."
+sleep 5 * 1000
 
 audio/free-device dev
 

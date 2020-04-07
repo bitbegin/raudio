@@ -36,10 +36,18 @@ record-cb: func [
 print-line "record test:"
 dev: audio/default-input-device
 audio/dump-device dev
-
-audio-device/connect dev ASAMPLE-TYPE-I32 as int-ptr! :record-cb
-audio-device/start dev null null
-
+res: false
+res: audio-device/set-sample-format dev ASAMPLE-TYPE-F32
+print-line ["set format float!: " res]
+res: audio-device/set-channels-type dev AUDIO-SPEAKER-STEREO
+print-line ["set channels stereo: " res]
+print-line ["new config: "]
+audio/dump-device dev
+res: audio-device/connect dev as int-ptr! :record-cb
+print-line ["connect: " res]
+res: audio-device/start dev null null
+print-line ["start: " res]
+print-line "now record 5 second ..."
 sleep 5 * 1000
 
 audio/free-device dev
