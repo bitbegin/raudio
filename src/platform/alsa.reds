@@ -239,6 +239,13 @@ OS-audio: context [
 				val			[int-ptr!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_set_buffer_time_near: "__snd_pcm_hw_params_set_buffer_time_near" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[int-ptr!]
+				dir			[int-ptr!]
+				return:		[integer!]
+			]
 			snd_pcm_hw_params: "snd_pcm_hw_params" [
 				pcm			[integer!]
 				params		[integer!]
@@ -254,6 +261,7 @@ OS-audio: context [
 	#define SND_PCM_FORMAT_S32_LE				10
 	#define SND_PCM_FORMAT_FLOAT_LE				14
 	#define SND_PCM_ACCESS_RW_INTERLEAVED		3
+	#define DEFAULT_BUFFER_SIZE					1024
 
 	ALSA-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
@@ -500,12 +508,7 @@ OS-audio: context [
 			return false
 		]
 		adev/rates-count: count
-		hr: snd_pcm_hw_params_set_format pcm params adev/format
-		;if hr < 0 [print-line ["set format: " snd_strerror hr]]
-		hr: snd_pcm_hw_params_set_channels pcm params speaker-channels adev/channel
-		;if hr < 0 [print-line ["set channels: " snd_strerror hr]]
-		hr: snd_pcm_hw_params_set_rate pcm params adev/rate 0
-		;if hr < 0 [print-line ["set rate: " snd_strerror hr]]
+		adev/buffer-size: DEFAULT_BUFFER_SIZE
 		snd_pcm_hw_params_free params
 		true
 	]
@@ -982,15 +985,23 @@ OS-audio: context [
 	buffer-size: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[integer!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
-		0
+		adev: as ALSA-DEVICE! dev
+		adev/buffer-size
 	]
 
 	set-buffer-size: func [
 		dev			[AUDIO-DEVICE!]
 		count		[integer!]
 		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
 	][
+		adev: as ALSA-DEVICE! dev
+		if adev/running? [return false]
+		adev/buffer-size: count
 		true
 	]
 
@@ -1174,11 +1185,17 @@ OS-audio: context [
 			snd_pcm_hw_params_free params
 			return false
 		]
+		hr: snd_pcm_hw_params_set_buffer_size pcm params adev/buffer-size
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
 		hr: snd_pcm_hw_params pcm params
 		;size: 0
 		;hr: snd_pcm_hw_params_get_buffer_size params :size
 		;print-line [hr " " size]
 		snd_pcm_hw_params_free params
+		snd_pcm_prepare pcm
 		true
 	]
 
