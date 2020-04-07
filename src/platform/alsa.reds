@@ -246,7 +246,7 @@ OS-audio: context [
 		rates-count		[integer!]
 		formats			[int-ptr!]						;-- support formats list
 		formats-count	[integer!]
-		channel			[integer!]						;-- default channels
+		channel			[CHANNEL-TYPE!]					;-- default channels
 		rate			[integer!]						;-- default rate
 		format			[AUDIO-SAMPLE-TYPE!]			;-- default format
 		pcm				[integer!]
@@ -535,7 +535,7 @@ OS-audio: context [
 				p: p + 1
 			]
 		]
-		print ["^/    default format: "]
+		print ["^/    formats: "]
 		case [
 			adev/format = ASAMPLE-TYPE-F32 [
 				print-line "float32!"
@@ -553,7 +553,7 @@ OS-audio: context [
 		print-line ["    default channels: " adev/channel]
 		print-line ["    default rate: " adev/rate]
 		print-line ["    default format: " adev/format]
-		;print-line ["    buffer frames: " buffer-size dev]
+		print-line ["    buffer frames: " adev/buffer-size]
 		print-line "================================"
 	]
 
@@ -884,9 +884,9 @@ OS-audio: context [
 		adev/formats
 	]
 
-	channels-count: func [
+	channels-type: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[integer!]
+		return:		[CHANNEL-TYPE!]
 		/local
 			adev	[ALSA-DEVICE!]
 	][
@@ -894,12 +894,13 @@ OS-audio: context [
 		adev/channel
 	]
 
-	set-channels-count: func [
+	set-channels-type: func [
 		dev			[AUDIO-DEVICE!]
-		chs			[integer!]
+		type		[CHANNEL-TYPE!]
 		return:		[logic!]
 		/local
 			adev	[ALSA-DEVICE!]
+			chs		[integer!]
 			pcm		[integer!]
 			params	[integer!]
 			p		[int-ptr!]
@@ -908,6 +909,7 @@ OS-audio: context [
 	][
 		adev: as ALSA-DEVICE! dev
 		if adev/running? [return false]
+		chs: speaker-channels type
 		pcm: 0
 		params: 0
 		p: as int-ptr! adev/id
