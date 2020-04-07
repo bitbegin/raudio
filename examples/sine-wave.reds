@@ -46,8 +46,11 @@ dev: audio/default-output-device
 audio/dump-device dev
 rate: as float! audio-device/sample-rate dev
 delta: freq * pi / rate
-audio-device/connect dev as int-ptr! :wave-cb
-audio-device/start dev null null
+res: false
+res: audio-device/connect dev as int-ptr! :wave-cb
+print-line ["connect: " res]
+res: audio-device/start dev null null
+print-line ["start: " res]
 sleep 5 * 1000
 
 audio/free-device dev

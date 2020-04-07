@@ -309,11 +309,13 @@ audio-device: context [
 		OS-audio/running? dev
 	]
 
+	;-- future use
 	can-connect?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
 	][true]
 
+	;-- future use
 	can-process?: func [
 		dev			[AUDIO-DEVICE!]
 		return:	[logic!]

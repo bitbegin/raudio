@@ -569,6 +569,8 @@ OS-audio: context [
 			rates		[int-ptr!]
 			num			[integer!]
 			frates		[int-ptr!]
+			nthis		[this!]
+			nclient		[IAudioClient]
 	][
 		set-memory as byte-ptr! dev #"^(00)" size? WASAPI-DEVICE!
 		pdev: as IMMDevice dthis/vtbl
@@ -694,9 +696,13 @@ OS-audio: context [
 			return false
 		]
 		dev/rates-count: count
+		;-- client can only be inited once, so we need a new client to get buffer-size
+		nthis: get-client dthis pdev
+		nclient: as IAudioClient nthis/vtbl
 		init-format-with ext dev/channel dev/rate dev/format
-		init-client-with dev/client client dev/buffer-size dev/rate ext
-		hr: client/GetBufferSize dev/client :dev/buffer-size
+		init-client-with nthis nclient dev/buffer-size dev/rate ext
+		hr: nclient/GetBufferSize nthis :dev/buffer-size
+		nclient/Release nthis
 		true
 	]
 
