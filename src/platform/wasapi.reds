@@ -768,7 +768,7 @@ OS-audio: context [
 				p: p + 1
 			]
 		]
-		print ["^/    default format: "]
+		print ["^/    formats: "]
 		case [
 			wdev/format = ASAMPLE-TYPE-F32 [
 				print-line "float32!"
