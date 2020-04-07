@@ -115,6 +115,23 @@ speaker-channels: func [
 	]
 ]
 
+to-channel-type: func [
+	chs			[integer!]
+	return:		[CHANNEL-TYPE!]
+][
+	case [
+		chs = 1 [AUDIO-SPEAKER-MONO]
+		chs = 2 [AUDIO-SPEAKER-STEREO]
+		chs = 3 [AUDIO-SPEAKER-2POINT1]
+		chs = 4 [AUDIO-SPEAKER-QUAD]
+		chs = 5 [AUDIO-SPEAKER-5POINT0]
+		chs = 6 [AUDIO-SPEAKER-5POINT1-SURROUND]
+		chs = 7 [AUDIO-SPEAKER-7POINT0]
+		chs = 8 [AUDIO-SPEAKER-7POINT1-SURROUND]
+		true [AUDIO-SPEAKER-LAST]
+	]
+]
+
 audio: context [
 	init: func [return: [logic!]] [
 		OS-audio/init

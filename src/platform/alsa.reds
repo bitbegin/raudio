@@ -306,6 +306,7 @@ OS-audio: context [
 			count		[integer!]
 			min			[integer!]
 			max			[integer!]
+			type		[CHANNEL-TYPE!]
 			channels	[int-ptr!]
 			num			[integer!]
 			rates		[int-ptr!]
@@ -313,7 +314,7 @@ OS-audio: context [
 	][
 		adev/running?: no
 		adev/format: -1
-		adev/channel: 0
+		adev/channel: AUDIO-SPEAKER-LAST
 		adev/rate: 0
 		;-- get hw-params
 		params: 0
@@ -387,23 +388,26 @@ OS-audio: context [
 		while [min <= max][
 			hr: snd_pcm_hw_params_test_channels pcm params min
 			if hr = 0 [
-				channels/1: min
-				channels: channels + 1
-				count: count + 1
-				case [
-					adev/channel = 0 [
-						adev/channel: min
+				type: to-channel-type min
+				if type <> AUDIO-SPEAKER-LAST [
+					channels/1: type
+					channels: channels + 1
+					count: count + 1
+					case [
+						adev/channel = AUDIO-SPEAKER-LAST [
+							adev/channel: type
+						]
+						type = AUDIO-SPEAKER-STEREO [
+							adev/channel: type
+						]
+						all [
+							type = AUDIO-SPEAKER-MONO
+							adev/channel <> AUDIO-SPEAKER-STEREO
+						][
+							adev/channel: type
+						]
+						true [0]
 					]
-					min = 2 [
-						adev/channel: 2
-					]
-					all [
-						min = 1
-						adev/channel <> 2
-					][
-						adev/channel: 1
-					]
-					true [0]
 				]
 			]
 			min: min + 1
@@ -462,7 +466,7 @@ OS-audio: context [
 		adev/rates-count: count
 		hr: snd_pcm_hw_params_set_format pcm params adev/format
 		;if hr < 0 [print-line ["set format: " snd_strerror hr]]
-		hr: snd_pcm_hw_params_set_channels pcm params adev/channel
+		hr: snd_pcm_hw_params_set_channels pcm params speaker-channels adev/channel
 		;if hr < 0 [print-line ["set channels: " snd_strerror hr]]
 		hr: snd_pcm_hw_params_set_rate pcm params adev/rate 0
 		;if hr < 0 [print-line ["set rate: " snd_strerror hr]]
@@ -933,7 +937,7 @@ OS-audio: context [
 			snd_pcm_close pcm
 			return false
 		]
-		adev/channel: chs
+		adev/channel: type
 		snd_pcm_hw_params_free params
 		snd_pcm_close pcm
 		true
