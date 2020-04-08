@@ -26,6 +26,23 @@ OS-audio: context [
 	]
 
 	#import [
+		"libpthread.so.0" cdecl [
+			pthread_create: "pthread_create" [
+				thread		[int-ptr!]
+				attr		[int-ptr!]
+				start		[int-ptr!]
+				arglist		[int-ptr!]
+				return:		[integer!]
+			]
+			pthread_join: "pthread_join" [
+				thread		[integer!]
+				retval		[int-ptr!]
+				return:		[integer!]
+			]
+		]
+	]
+
+	#import [
 		"libasound.so.2" cdecl [
 			snd_pcm_type_name: "snd_pcm_type_name" [
 				type		[integer!]
@@ -252,9 +269,46 @@ OS-audio: context [
 				dir			[int-ptr!]
 				return:		[integer!]
 			]
+			snd_pcm_hw_params_set_period_time_near: "__snd_pcm_hw_params_set_period_time_near" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[int-ptr!]
+				dir			[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_hw_params_set_periods: "snd_pcm_hw_params_set_periods" [
+				pcm			[integer!]
+				params		[integer!]
+				val			[integer!]
+				dir			[integer!]
+				return:		[integer!]
+			]
 			snd_pcm_hw_params: "snd_pcm_hw_params" [
 				pcm			[integer!]
 				params		[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_sw_params_malloc: "snd_pcm_sw_params_malloc" [
+				pcm			[integer!]
+				params		[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_sw_params_free: "snd_pcm_sw_params_free" [
+				params		[integer!]
+			]
+			snd_pcm_sw_params_current: "snd_pcm_sw_params_current" [
+				pcm			[integer!]
+				params		[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_state: "snd_pcm_state" [
+				pcm			[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_writei: "snd_pcm_writei" [
+				pcm			[integer!]
+				buffer		[byte-ptr!]
+				size		[integer!]
 				return:		[integer!]
 			]
 			snd_asoundlib_version: "snd_asoundlib_version" [
@@ -267,7 +321,8 @@ OS-audio: context [
 	#define SND_PCM_FORMAT_S32_LE				10
 	#define SND_PCM_FORMAT_FLOAT_LE				14
 	#define SND_PCM_ACCESS_RW_INTERLEAVED		3
-	#define DEFAULT_BUFFER_SIZE					2048
+	#define DEFAULT_PERIOD_TIME					100000
+	#define DEFAULT_BUFFER_TIME					500000
 
 	ALSA-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
@@ -287,6 +342,8 @@ OS-audio: context [
 		rate			[integer!]						;-- default rate
 		format			[AUDIO-SAMPLE-TYPE!]			;-- default format
 		pcm				[integer!]
+		thread			[integer!]
+		buffer			[byte-ptr!]
 	]
 
 	output-desired: [
@@ -345,6 +402,33 @@ OS-audio: context [
 				SND_PCM_FORMAT_S16_LE
 			]
 		]
+	]
+
+	set-params-with: func [
+		adev			[ALSA-DEVICE!]
+		pcm				[integer!]
+		params			[integer!]
+		return:			[integer!]
+		/local
+			hr			[integer!]
+	][
+		hr: snd_pcm_hw_params_set_access pcm params SND_PCM_ACCESS_RW_INTERLEAVED
+		if hr < 0 [
+			return hr
+		]
+		hr: snd_pcm_hw_params_set_format pcm params to-params-format adev/format
+		if hr < 0 [
+			return hr
+		]
+		hr: snd_pcm_hw_params_set_channels pcm params speaker-channels adev/channel
+		if hr < 0 [
+			return hr
+		]
+		hr: snd_pcm_hw_params_set_rate pcm params adev/rate 0
+		if hr < 0 [
+			return hr
+		]
+		0
 	]
 
 	init-device: func [
@@ -514,7 +598,31 @@ OS-audio: context [
 			return false
 		]
 		adev/rates-count: count
-		adev/buffer-size: DEFAULT_BUFFER_SIZE
+		hr: set-params-with adev pcm params
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		min: DEFAULT_BUFFER_TIME
+		max: 0
+		hr: snd_pcm_hw_params_set_buffer_time_near pcm params :min :max
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		min: DEFAULT_PERIOD_TIME
+		max: 0
+		hr: snd_pcm_hw_params_set_period_time_near pcm params :min :max
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
+		hr: snd_pcm_hw_params pcm params
+		hr: snd_pcm_hw_params_get_buffer_size params :adev/buffer-size
+		if hr < 0 [
+			snd_pcm_hw_params_free params
+			return false
+		]
 		snd_pcm_hw_params_free params
 		true
 	]
@@ -1007,7 +1115,8 @@ OS-audio: context [
 	][
 		adev: as ALSA-DEVICE! dev
 		if adev/running? [return false]
-		adev/buffer-size: count
+		;-- how to calc buffer time and period time by this?
+		;adev/buffer-size: count
 		true
 	]
 
@@ -1154,14 +1263,15 @@ OS-audio: context [
 		no
 	]
 
-	set-hw-params: func [
+	prepare-hw-params: func [
 		adev		[ALSA-DEVICE!]
 		pcm			[integer!]
 		return:		[logic!]
 		/local
 			params	[integer!]
 			hr		[integer!]
-			size	[integer!]
+			;min		[integer!]
+			;max		[integer!]
 	][
 		params: 0
 		hr: snd_pcm_hw_params_malloc :params
@@ -1171,35 +1281,27 @@ OS-audio: context [
 			snd_pcm_hw_params_free params
 			return false
 		]
-		hr: snd_pcm_hw_params_set_access pcm params SND_PCM_ACCESS_RW_INTERLEAVED
+		hr: set-params-with adev pcm params
 		if hr < 0 [
 			snd_pcm_hw_params_free params
 			return false
 		]
-		hr: snd_pcm_hw_params_set_format pcm params to-params-format adev/format
-		if hr < 0 [
-			snd_pcm_hw_params_free params
-			return false
-		]
-		hr: snd_pcm_hw_params_set_channels pcm params speaker-channels adev/channel
-		if hr < 0 [
-			snd_pcm_hw_params_free params
-			return false
-		]
-		hr: snd_pcm_hw_params_set_rate pcm params adev/rate 0
-		if hr < 0 [
-			snd_pcm_hw_params_free params
-			return false
-		]
-		hr: snd_pcm_hw_params_set_buffer_size pcm params adev/buffer-size
-		if hr < 0 [
-			snd_pcm_hw_params_free params
-			return false
-		]
+		;-- TBD: to support set buffer size
+		;min: xxxx
+		;max: 0
+		;hr: snd_pcm_hw_params_set_buffer_time_near pcm params :min :max
+		;if hr < 0 [
+		;	snd_pcm_hw_params_free params
+		;	return false
+		;]
+		;min: xxxx
+		;max: 0
+		;hr: snd_pcm_hw_params_set_period_time_near pcm params :min :max
+		;if hr < 0 [
+		;	snd_pcm_hw_params_free params
+		;	return false
+		;]
 		hr: snd_pcm_hw_params pcm params
-		;size: 0
-		;hr: snd_pcm_hw_params_get_buffer_size params :size
-		;print-line [hr " " size]
 		snd_pcm_hw_params_free params
 		snd_pcm_prepare pcm
 		true
@@ -1211,22 +1313,62 @@ OS-audio: context [
 		return:		[logic!]
 		/local
 			adev	[ALSA-DEVICE!]
-			p		[int-ptr!]
-			id		[c-string!]
-			pcm		[integer!]
-			hr		[integer!]
-			ret		[logic!]
 	][
 		adev: as ALSA-DEVICE! dev
 		if adev/running? [return false]
-		p: as int-ptr! adev/id
-		id: as c-string! p + 1
-		pcm: 0
-		hr: snd_pcm_open :pcm id adev/type 0
-		if hr <> 0 [return false]
-		ret: set-hw-params adev pcm
-		snd_pcm_close pcm
-		ret
+		adev/io-cb: io-cb
+		true
+	]
+
+	thread-cb: func [
+		[cdecl]
+		arg			[int-ptr!]
+		return:		[int-ptr!]
+		/local
+			adev	[ALSA-DEVICE!]
+			abuff	[AUDIO-DEVICE-IO! value]
+			pcb		[AUDIO-IO-CALLBACK!]
+			temp	[integer!]
+			chs		[int-ptr!]
+			size	[integer!]
+			step	[integer!]
+			hr		[integer!]
+	][
+		adev: as ALSA-DEVICE! arg
+		while [adev/running?][
+			;-- output
+			if adev/type = ADEVICE-TYPE-OUTPUT [
+				pcb: as AUDIO-IO-CALLBACK! adev/io-cb
+				set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
+				abuff/buffer/sample-type: adev/format
+				abuff/buffer/frames-count: adev/buffer-size
+				temp: speaker-channels adev/channel
+				abuff/buffer/channels-count: temp
+				abuff/buffer/stride: temp
+				abuff/buffer/contiguous?: yes
+				chs: as int-ptr! abuff/buffer/channels
+				size: either adev/format = ASAMPLE-TYPE-I16 [2][4]
+				step: as integer! adev/buffer
+				loop temp [
+					chs/1: step
+					chs: chs + 1
+					step: step + size
+				]
+				pcb arg abuff
+				hr: snd_pcm_writei adev/pcm adev/buffer adev/buffer-size
+				if hr < 0 [
+					;print-line snd_pcm_state_name snd_pcm_state adev/pcm
+					;print-line ["write: " hr " " snd_strerror hr]
+					snd_pcm_prepare adev/pcm
+					continue
+				]
+				continue
+			]
+			if adev/type = ADEVICE-TYPE-INPUT [
+				continue
+			]
+		]
+		arg
 	]
 
 	start: func [
@@ -1234,21 +1376,76 @@ OS-audio: context [
 		start-cb	[int-ptr!]				;-- audio-device-callback!
 		stop-cb		[int-ptr!]				;-- audio-device-callback!
 		return:		[logic!]
+		/local
+			adev		[ALSA-DEVICE!]
+			p			[int-ptr!]
+			id			[c-string!]
+			hr			[integer!]
+			start_cb	[AUDIO-DEVICE-CALLBACK!]
+			chs			[integer!]
+			size		[integer!]
 	][
-		yes
+		adev: as ALSA-DEVICE! dev
+		if adev/running? [return true]
+		p: as int-ptr! adev/id
+		id: as c-string! p + 1
+		hr: snd_pcm_open :adev/pcm id adev/type 0
+		if hr <> 0 [return false]
+		unless prepare-hw-params adev adev/pcm [return false]
+		adev/running?: yes
+		chs: speaker-channels adev/channel
+		size: either adev/format = ASAMPLE-TYPE-I16 [2][4]
+		size: size * chs * adev/buffer-size
+		adev/buffer: allocate size
+
+		unless null? adev/io-cb [
+			;-- snd_async_add_pcm_handler maybe also work, but can't find a way to wait it
+			hr: pthread_create :adev/thread null as int-ptr! :thread-cb dev
+			if hr <> 0 [return false]
+		]
+
+		unless null? start-cb [
+			start_cb: as AUDIO-DEVICE-CALLBACK! start-cb
+			start_cb dev
+		]
+		adev/stop-cb: stop-cb
+		true
 	]
 
 	stop: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
+		/local
+			adev	[ALSA-DEVICE!]
+			val		[integer!]
+			stop_cb	[AUDIO-DEVICE-CALLBACK!]
 	][
+		adev: as ALSA-DEVICE! dev
+		if adev/running? [
+			adev/running?: no
+			if adev/thread <> 0 [
+				val: 0
+				pthread_join adev/thread :val
+			]
+			unless null? adev/stop-cb [
+				stop_cb: as AUDIO-DEVICE-CALLBACK! adev/stop-cb
+				stop_cb dev
+			]
+			free adev/buffer
+			snd_pcm_close adev/pcm
+		]
 		true
 	]
 
 	wait: func [
 		dev			[AUDIO-DEVICE!]
+		/local
+			adev	[ALSA-DEVICE!]
+			val		[integer!]
 	][
-		0
+		adev: as ALSA-DEVICE! dev
+		val: 0
+		pthread_join adev/thread :val
 	]
 
 	sleep: func [
