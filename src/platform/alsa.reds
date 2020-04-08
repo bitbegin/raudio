@@ -311,6 +311,12 @@ OS-audio: context [
 				size		[integer!]
 				return:		[integer!]
 			]
+			snd_pcm_readi: "snd_pcm_readi" [
+				pcm			[integer!]
+				buffer		[byte-ptr!]
+				size		[integer!]
+				return:		[integer!]
+			]
 			snd_pcm_wait: "snd_pcm_wait" [
 				pcm			[integer!]
 				timeout		[integer!]
@@ -1377,6 +1383,25 @@ OS-audio: context [
 				continue
 			]
 			if adev/type = ADEVICE-TYPE-INPUT [
+				hr: snd_pcm_readi adev/pcm adev/buffer adev/buffer-size
+				if hr <> adev/buffer-size [break]
+				pcb: as AUDIO-IO-CALLBACK! adev/io-cb
+				set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
+				abuff/buffer/sample-type: adev/format
+				abuff/buffer/frames-count: adev/buffer-size
+				temp: speaker-channels adev/channel
+				abuff/buffer/channels-count: temp
+				abuff/buffer/stride: temp
+				abuff/buffer/contiguous?: yes
+				chs: as int-ptr! abuff/buffer/channels
+				size: either adev/format = ASAMPLE-TYPE-I16 [2][4]
+				step: as integer! adev/buffer
+				loop temp [
+					chs/1: step
+					chs: chs + 1
+					step: step + size
+				]
+				pcb arg abuff
 				continue
 			]
 		]
