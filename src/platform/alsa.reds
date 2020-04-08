@@ -311,6 +311,18 @@ OS-audio: context [
 				size		[integer!]
 				return:		[integer!]
 			]
+			snd_pcm_wait: "snd_pcm_wait" [
+				pcm			[integer!]
+				timeout		[integer!]
+				return:		[integer!]
+			]
+			snd_async_add_pcm_handler: "snd_async_add_pcm_handler" [
+				handler		[int-ptr!]
+				pcm			[integer!]
+				cb			[int-ptr!]
+				data		[int-ptr!]
+				return:		[integer!]
+			]
 			snd_asoundlib_version: "snd_asoundlib_version" [
 				return:		[c-string!]
 			]
@@ -1399,7 +1411,8 @@ OS-audio: context [
 		adev/buffer: allocate size
 
 		unless null? adev/io-cb [
-			;-- snd_async_add_pcm_handler maybe also work, but can't find a way to wait it
+			;-- snd_async_add_pcm_handler don't work for some virtual devices
+			;-- it works for devices like "plughw:0,0"
 			hr: pthread_create :adev/thread null as int-ptr! :thread-cb dev
 			if hr <> 0 [return false]
 		]
