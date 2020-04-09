@@ -274,6 +274,24 @@ OS-audio: context [
 		true
 	]
 
+	config-rate: func [
+		id			[integer!]
+		rate		[integer!]
+		return:		[logic!]
+		/local
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			frate	[float!]
+	][
+		addr/mSelector: cf-enum kAudioDevicePropertyNominalSampleRate
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		frate: as float! rate
+		hr: AudioObjectSetPropertyData id addr 0 null size? float! as int-ptr! :frate
+		if hr <> 0 [return false]
+		true
+	]
+
 	init-device: func [
 		cdev		[COREAUDIO-DEVICE!]
 		id			[AudioDeviceID]
@@ -360,6 +378,18 @@ OS-audio: context [
 			return false
 		]
 		cdev/rates-count: count
+		;-- get frames
+		addr/mSelector: cf-enum kAudioDevicePropertyBufferFrameSize
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		dsize: 0
+		hr: AudioObjectGetPropertyDataSize id addr 0 null :dsize
+		if hr <> 0 [return false]
+		if dsize <> 4 [return false]
+		hr: AudioObjectGetPropertyData id addr 0 null :dsize :cdev/buffer-size
+		if hr <> 0 [return false]
+		;-- use select rate
+		unless config-rate id cdev/rate [return false]
 		true
 	]
 
@@ -783,18 +813,9 @@ OS-audio: context [
 		return:		[logic!]
 		/local
 			cdev	[COREAUDIO-DEVICE!]
-			addr	[AudioObjectPropertyAddress value]
-			hr		[integer!]
-			frate	[float!]
 	][
 		cdev: as COREAUDIO-DEVICE! dev
-		addr/mSelector: cf-enum kAudioDevicePropertyNominalSampleRate
-		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
-		addr/mElement: kAudioObjectPropertyElementMaster
-		frate: as float! rate
-		hr: AudioObjectSetPropertyData cdev/id addr 0 null size? float! as int-ptr! :frate
-		if hr <> 0 [return false]
-		true
+		config-rate cdev/id rate
 	]
 
 	sample-format: func [
