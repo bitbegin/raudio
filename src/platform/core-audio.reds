@@ -49,6 +49,7 @@ OS-audio: context [
 	#define kAudioDevicePropertyNominalSampleRate		"nsrt"
 	#define kAudioDevicePropertyBufferFrameSize			"fsiz"
 	#define kAudioDevicePropertyPreferredChannelLayout	"srnd"
+	#define kAudioDevicePropertyAvailableNominalSampleRates		"nsr#"
 
 	#define AudioObjectID					integer!
 	#define AudioDeviceID					AudioObjectID
@@ -82,6 +83,11 @@ OS-audio: context [
 		mChannelDescriptions	[AudioChannelDescription value]
 	]
 
+	AudioValueRange: alias struct! [
+		mMinimum		[float!]
+		mMaximum		[float!]
+	]
+
 	COREAUDIO-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
 		id				[AudioObjectID]
@@ -108,6 +114,22 @@ OS-audio: context [
 		mSelector			[AudioObjectPropertySelector]
 		mScope				[AudioObjectPropertyScope]
 		mElement			[AudioObjectPropertyElement]
+	]
+
+	rates-filters: [
+		5512
+		8000
+		11025
+		16000
+		22050
+		32000
+		44100
+		48000
+		64000
+		88200
+		96000
+		176400
+		192000
 	]
 
 	#import [
@@ -256,10 +278,21 @@ OS-audio: context [
 		cdev		[COREAUDIO-DEVICE!]
 		id			[AudioDeviceID]
 		type		[integer!]
-		chs			[integer!]
+		chs			[integer!]					;-- TBD: only support default channels for now
 		return:		[logic!]
 		/local
 			buff	[byte-ptr!]
+			addr	[AudioObjectPropertyAddress value]
+			hr		[integer!]
+			dsize	[integer!]
+			num		[integer!]
+			rbuff	[byte-ptr!]
+			ranges	[AudioValueRange]
+			rates	[int-ptr!]
+			count	[integer!]
+			n		[integer!]
+			filters	[int-ptr!]
+			f		[float!]
 	][
 		set-memory as byte-ptr! cdev #"^(00)" size? COREAUDIO-DEVICE!
 		cdev/running?: no
@@ -284,6 +317,49 @@ OS-audio: context [
 		cdev/channels/1: cdev/channel
 		cdev/channels/2: 0
 		cdev/channels-count: 1
+		;-- get rates
+		addr/mSelector: cf-enum kAudioDevicePropertyAvailableNominalSampleRates
+		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mElement: kAudioObjectPropertyElementMaster
+		dsize: 0
+		hr: AudioObjectGetPropertyDataSize id addr 0 null :dsize
+		if hr <> 0 [return false]
+		rbuff: allocate dsize
+		hr: AudioObjectGetPropertyData id addr 0 null :dsize as int-ptr! rbuff
+		if hr <> 0 [return false]
+		num: dsize / size? AudioValueRange
+		n: size? rates-filters
+		rates: as int-ptr! allocate n + 1 * 4
+		set-memory as byte-ptr! rates #"^(00)" n + 1 * 4
+		cdev/rates: rates
+		count: 0
+		filters: rates-filters
+		loop n [
+			ranges: as AudioValueRange rbuff
+			loop num [
+				f: as float! filters/1
+				if all [
+					f >= ranges/mMinimum
+					f <= ranges/mMaximum
+				][
+					rates/1: filters/1
+					rates: rates + 1
+					count: count + 1
+					if cdev/rate <> 44100 [
+						cdev/rate: filters/1
+					]
+				]
+				ranges: ranges + 1
+			]
+			filters: filters + 1
+		]
+		free rbuff
+		if count = 0 [
+			free as byte-ptr! cdev/rates
+			cdev/rates: null
+			return false
+		]
+		cdev/rates-count: count
 		true
 	]
 
