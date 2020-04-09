@@ -649,8 +649,6 @@ OS-audio: context [
 		dev			[AUDIO-DEVICE!]
 		/local
 			adev	[ALSA-DEVICE!]
-			val		[integer!]
-			hr		[integer!]
 			p		[int-ptr!]
 	][
 		if null? dev [print-line "null device!" exit]

@@ -66,6 +66,21 @@ OS-audio: context [
 		mBuffers			[AudioBuffer value]
 	]
 
+	AudioChannelDescription: alias struct! [
+		mChannelLabel		[integer!]
+		mChannelFlags		[integer!]
+		mCoordinates1		[float32!]
+		mCoordinates2		[float32!]
+		mCoordinates3		[float32!]
+	]
+
+	AudioChannelLayout: alias struct! [
+		mChannelLayoutTag		[integer!]
+		mChannelBitmap			[integer!]
+		mNumberDesc				[integer!]
+		mChannelDescriptions	[AudioChannelDescription value]
+	]
+
 	COREAUDIO-DEVICE!: alias struct! [
 		type			[AUDIO-DEVICE-TYPE!]
 		id				[AudioObjectID]
@@ -264,36 +279,40 @@ OS-audio: context [
 	]
 
 	init-device: func [
-		dev			[COREAUDIO-DEVICE!]
+		cdev		[COREAUDIO-DEVICE!]
 		id			[AudioDeviceID]
 		type		[integer!]
 		/local
 			buff	[byte-ptr!]
 	][
-		set-memory as byte-ptr! dev #"^(00)" size? COREAUDIO-DEVICE!
+		set-memory as byte-ptr! cdev #"^(00)" size? COREAUDIO-DEVICE!
+		cdev/running?: no
+		cdev/format: -1
+		cdev/channel: AUDIO-SPEAKER-LAST
+		cdev/rate: 0
 		buff: as byte-ptr! system/stack/allocate 4
 		sprintf [buff "%04X" id]
-		dev/id: id
-		dev/id-str: type-string/load-utf8 buff
-		dev/type: either type = -1 [
+		cdev/id: id
+		cdev/id-str: type-string/load-utf8 buff
+		cdev/type: either type = -1 [
 			get-device-type id
 		][
 			type
 		]
 		if any [
-			dev/type = ADEVICE-TYPE-INPUT
-			dev/type = ADEVICE-TYPE-OUTPUT
+			cdev/type = ADEVICE-TYPE-INPUT
+			cdev/type = ADEVICE-TYPE-OUTPUT
 		][
-			get-buffer-list id dev/type dev/buff-list
+			get-buffer-list id cdev/type cdev/buff-list
 		]
-		dev/name: get-device-name id
-		dev/running?: no
+		cdev/name: get-device-name id
 	]
 
 	dump-device: func [
 		dev			[AUDIO-DEVICE!]
 		/local
 			cdev	[COREAUDIO-DEVICE!]
+			p		[int-ptr!]
 	][
 		if null? dev [print-line "null device!" exit]
 		cdev: as COREAUDIO-DEVICE! dev
@@ -307,9 +326,68 @@ OS-audio: context [
 		print-line ["    id: " cdev/id]
 		print "    name: "
 		type-string/uprint cdev/name
-		print-line ["^/    channels: " cdev/buff-list/mBuffers/mNumberChannels]
-		print-line ["    sample rate: " sample-rate dev]
-		print-line ["    buffer frames: " buffer-size dev]
+		print "^/    formats: "
+		either null? cdev/formats [
+			print "none"
+		][
+			p: cdev/formats
+			loop cdev/formats-count [
+				case [
+					p/1 = ASAMPLE-TYPE-F32 [
+						print "float32! "
+					]
+					p/1 = ASAMPLE-TYPE-I32 [
+						print "integer! "
+					]
+					p/1 = ASAMPLE-TYPE-I16 [
+						print "int16! "
+					]
+					true [
+						print "unknown "
+					]
+				]
+				p: p + 1
+			]
+		]
+		print "^/    channels: "
+		either null? cdev/channels [
+			print "none"
+		][
+			p: cdev/channels
+			loop cdev/channels-count [
+				print [p/1 " "]
+				p: p + 1
+			]
+		]
+		print "^/    rates: "
+		either null? cdev/rates [
+			print "none"
+		][
+			p: cdev/rates
+			loop cdev/rates-count [
+				print [p/1 " "]
+				p: p + 1
+			]
+		]
+		print ["^/    formats: "]
+		case [
+			cdev/format = ASAMPLE-TYPE-F32 [
+				print-line "float32!"
+			]
+			cdev/format = ASAMPLE-TYPE-I32 [
+				print-line "integer!"
+			]
+			cdev/format = ASAMPLE-TYPE-I16 [
+				print-line "int16!"
+			]
+			true [
+				print-line "unknown"
+			]
+		]
+		print-line ["    default channels: " cdev/channel]
+		print-line ["    default rate: " cdev/rate]
+		print-line ["    default format: " cdev/format]
+		print-line ["    buffer frames: " cdev/buffer-size]
 		print-line "================================"
 	]
 
