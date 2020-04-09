@@ -999,6 +999,15 @@ OS-audio: context [
 		unk/Release wdev/client
 		type-string/release wdev/id
 		type-string/release wdev/name
+		unless null? wdev/channels [
+			free as byte-ptr! wdev/channels
+		]
+		unless null? wdev/rates [
+			free as byte-ptr! wdev/rates
+		]
+		unless null? wdev/formats [
+			free as byte-ptr! wdev/formats
+		]
 		free as byte-ptr! wdev
 	]
 
