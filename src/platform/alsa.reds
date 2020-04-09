@@ -969,7 +969,7 @@ OS-audio: context [
 			adev	[ALSA-DEVICE!]
 	][
 		if null? dev [exit]
-		;-- stop dev
+		stop dev
 		adev: as ALSA-DEVICE! dev
 		type-string/release adev/id
 		type-string/release adev/name
