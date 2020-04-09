@@ -77,6 +77,15 @@ OS-audio: context [
 		stop-cb			[int-ptr!]
 		running?		[logic!]
 		buffer-size		[integer!]
+		channels		[int-ptr!]						;-- support channels list
+		channels-count	[integer!]
+		rates			[int-ptr!]						;-- support rates list
+		rates-count		[integer!]
+		formats			[int-ptr!]						;-- support formats list
+		formats-count	[integer!]
+		channel			[CHANNEL-TYPE!]					;-- default channels
+		rate			[integer!]						;-- default rate
+		format			[AUDIO-SAMPLE-TYPE!]			;-- default format
 		proc-id			[integer!]
 	]
 
@@ -533,14 +542,67 @@ OS-audio: context [
 		cdev/id-str
 	]
 
-	channels-count: func [
+	channels: func [
 		dev			[AUDIO-DEVICE!]
-		return:		[integer!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
 		/local
 			cdev	[COREAUDIO-DEVICE!]
 	][
 		cdev: as COREAUDIO-DEVICE! dev
-		cdev/buff-list/mBuffers/mNumberChannels
+		if null? cdev/channels [return null]
+		count/1: cdev/channels-count
+		cdev/channels
+	]
+
+	rates: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+	][
+		cdev: as COREAUDIO-DEVICE! dev
+		if null? cdev/rates [return null]
+		count/1: cdev/rates-count
+		cdev/rates
+	]
+
+	sample-formats: func [
+		dev			[AUDIO-DEVICE!]
+		count		[int-ptr!]
+		return:		[int-ptr!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+	][
+		cdev: as COREAUDIO-DEVICE! dev
+		if null? cdev/formats [return null]
+		count/1: cdev/formats-count
+		cdev/formats
+	]
+
+	channels-type: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[CHANNEL-TYPE!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+	][
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/channel
+	]
+
+	set-channels-type: func [
+		dev			[AUDIO-DEVICE!]
+		type		[CHANNEL-TYPE!]
+		return:		[logic!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+			chs		[integer!]
+	][
+		cdev: as COREAUDIO-DEVICE! dev
+		if cdev/running? [return false]
+		chs: speaker-channels type
+		true
 	]
 
 	buffer-size: func [
@@ -630,6 +692,25 @@ OS-audio: context [
 		true
 	]
 
+	sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[AUDIO-SAMPLE-TYPE!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+	][
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/format
+	]
+
+	set-sample-format: func [
+		dev			[AUDIO-DEVICE!]
+		type		[AUDIO-SAMPLE-TYPE!]
+		return:		[logic!]
+	][
+		if type = ASAMPLE-TYPE-F32 [return true]		;-- always float! for macOS
+		true
+	]
+
 	input?: func [
 		dev			[AUDIO-DEVICE!]
 		return:		[logic!]
@@ -669,16 +750,13 @@ OS-audio: context [
 
 	connect: func [
 		dev			[AUDIO-DEVICE!]
-		stype		[AUDIO-SAMPLE-TYPE!]
 		io-cb		[int-ptr!]
 		return:		[logic!]
 		/local
 			cdev	[COREAUDIO-DEVICE!]
 	][
-		if stype <> ASAMPLE-TYPE-F32 [return false]
 		cdev: as COREAUDIO-DEVICE! dev
 		if cdev/running? [return false]
-		cdev/sample-type: ASAMPLE-TYPE-F32
 		cdev/io-cb: io-cb
 		true
 	]
@@ -708,10 +786,10 @@ OS-audio: context [
 		if cdev/type = ADEVICE-TYPE-OUTPUT [
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
 			if output_data/mNumberBuffers <> 1 [return 1]
-			abuff/buffer/sample-type: cdev/sample-type
+			abuff/buffer/sample-type: cdev/format
 			ch-count: output_data/mBuffers/mNumberChannels
 			bytes: output_data/mBuffers/mDataByteSize
-			size: either cdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			size: either cdev/format = ASAMPLE-TYPE-I16 [2][4]
 			abuff/buffer/channels-count: ch-count
 			abuff/buffer/frames-count: bytes / size / ch-count
 			abuff/buffer/stride: ch-count
@@ -730,10 +808,10 @@ OS-audio: context [
 		if cdev/type = ADEVICE-TYPE-INPUT [
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
 			if input_data/mNumberBuffers <> 1 [return 1]
-			abuff/buffer/sample-type: cdev/sample-type
+			abuff/buffer/sample-type: cdev/format
 			ch-count: input_data/mBuffers/mNumberChannels
 			bytes: input_data/mBuffers/mDataByteSize
-			size: either cdev/sample-type = ASAMPLE-TYPE-I16 [2][4]
+			size: either cdev/format = ASAMPLE-TYPE-I16 [2][4]
 			abuff/buffer/channels-count: ch-count
 			abuff/buffer/frames-count: bytes / size / ch-count
 			abuff/buffer/stride: ch-count
