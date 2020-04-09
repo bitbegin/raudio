@@ -252,40 +252,14 @@ OS-audio: context [
 		true
 	]
 
-	device-type?: func [
-		id			[AudioDeviceID]
-		type		[AUDIO-DEVICE-TYPE!]
-		return:		[integer!]
-		/local
-			list	[AudioBufferList value]
-	][
-		unless get-buffer-list id type list [return -1]
-		if list/mNumberBuffers = 1 [return type]
-		-1
-	]
-
-	get-device-type: func [
-		id			[AudioDeviceID]
-		return:		[AUDIO-DEVICE-TYPE!]
-		/local
-			type	[integer!]
-			list	[AudioBufferList]
-	][
-		type: device-type? id ADEVICE-TYPE-INPUT
-		if type = ADEVICE-TYPE-INPUT [return ADEVICE-TYPE-INPUT]
-		type: device-type? id ADEVICE-TYPE-OUTPUT
-		if type = ADEVICE-TYPE-OUTPUT [return ADEVICE-TYPE-OUTPUT]
-		return -1
-	]
-
 	init-device: func [
 		cdev		[COREAUDIO-DEVICE!]
 		id			[AudioDeviceID]
 		type		[integer!]
+		chs			[integer!]
 		return:		[logic!]
 		/local
-			buff		[byte-ptr!]
-			buff-list	[AudioBufferList value]
+			buff	[byte-ptr!]
 	][
 		set-memory as byte-ptr! cdev #"^(00)" size? COREAUDIO-DEVICE!
 		cdev/running?: no
@@ -296,14 +270,8 @@ OS-audio: context [
 		sprintf [buff "%04X" id]
 		cdev/id: id
 		cdev/id-str: type-string/load-utf8 buff
-		cdev/type: either type = -1 [
-			get-device-type id
-		][
-			type
-		]
+		cdev/type: type
 		cdev/name: get-device-name id
-		if cdev/type = -1 [return true]
-		get-buffer-list id cdev/type buff-list
 		;-- get formats
 		cdev/formats: as int-ptr! allocate 2 * 4
 		cdev/formats/1: ASAMPLE-TYPE-F32
@@ -311,7 +279,7 @@ OS-audio: context [
 		cdev/formats-count: 1
 		cdev/format: ASAMPLE-TYPE-F32
 		;-- get channels
-		cdev/channel: to-channel-type buff-list/mBuffers/mNumberChannels
+		cdev/channel: to-channel-type chs
 		cdev/channels: as int-ptr! allocate 2 * 4
 		cdev/channels/1: cdev/channel
 		cdev/channels/2: 0
@@ -410,6 +378,7 @@ OS-audio: context [
 			hr		[integer!]
 			id		[AudioDeviceID]
 			dsize	[integer!]
+			blist	[AudioBufferList value]
 			cdev	[COREAUDIO-DEVICE!]
 	][
 		addr/mSelector: cf-enum either type = ADEVICE-TYPE-OUTPUT [
@@ -423,8 +392,10 @@ OS-audio: context [
 		dsize: size? AudioDeviceID
 		hr: AudioObjectGetPropertyData kAudioObjectSystemObject addr 0 null :dsize :id
 		if hr <> 0 [return null]
+		unless get-buffer-list id type blist [return null]
+		unless blist/mNumberBuffers >= 1 [return null]
 		cdev: as COREAUDIO-DEVICE! allocate size? COREAUDIO-DEVICE!
-		init-device cdev id type
+		init-device cdev id type blist/mBuffers/mNumberChannels
 		as AUDIO-DEVICE! cdev
 	]
 
@@ -440,145 +411,106 @@ OS-audio: context [
 		default-device ADEVICE-TYPE-OUTPUT
 	]
 
-	input-devices: func [
-		count		[int-ptr!]				;-- number of input devices
-		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
-	][
-		get-devices 1 count
-	]
-
-	output-devices: func [
-		count		[int-ptr!]				;-- number of output devices
-		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
-	][
-		get-devices 0 count
-	]
-
-	get-devices*: func [
+	get-devices: func [
+		type		[AUDIO-DEVICE-TYPE!]
 		count		[int-ptr!]			;-- number of input devices
 		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
 		/local
 			addr	[AudioObjectPropertyAddress value]
 			hr		[integer!]
 			dsize	[integer!]
+			c		[integer!]
 			ids		[int-ptr!]
 			ids2	[int-ptr!]
 			list	[int-ptr!]
-			end		[int-ptr!]
 			itor	[int-ptr!]
+			num		[integer!]
+			blist	[AudioBufferList value]
 			cdev	[COREAUDIO-DEVICE!]
 	][
 		count/1: 0
 		addr/mSelector: cf-enum kAudioHardwarePropertyDevices
-		addr/mScope: cf-enum kAudioObjectPropertyScopeGlobal
+		addr/mScope: cf-enum either type = ADEVICE-TYPE-OUTPUT [kAudioObjectPropertyScopeOutput][kAudioObjectPropertyScopeInput]
 		addr/mElement: kAudioObjectPropertyElementMaster
 		dsize: 0
 		hr: AudioObjectGetPropertyDataSize kAudioObjectSystemObject addr 0 null :dsize
 		if hr <> 0 [return null]
-		count/1: dsize / size? AudioDeviceID
-		if count/1 = 0 [return null]
+		c: dsize / size? AudioDeviceID
+		if c = 0 [return null]
 		ids: as int-ptr! allocate dsize
 		ids2: ids
 		hr: AudioObjectGetPropertyData kAudioObjectSystemObject addr 0 null :dsize ids
 		if hr <> 0 [free as byte-ptr! ids return null]
-		list: as int-ptr! allocate count/1 + 1 * 4
+		list: as int-ptr! allocate c + 1 * 4
+		set-memory as byte-ptr! list #"^@" c + 1 * 4
 		itor: list
-		end: list + count/1
-		end/1: 0
-		loop count/1 [
-			either itor < end [
+		num: 0
+		loop c [
+			if all [
+				get-buffer-list ids2/1 type blist
+				blist/mNumberBuffers >= 1
+			][
 				cdev: as COREAUDIO-DEVICE! allocate size? COREAUDIO-DEVICE!
-				init-device cdev ids2/1 -1
+				init-device cdev ids2/1 type blist/mBuffers/mNumberChannels
 				itor/1: as integer! cdev
 				itor: itor + 1
-				ids2: ids2 + 1
-			][
-				free as byte-ptr! ids
-				free as byte-ptr! list
-				return null
+				num: num + 1
 			]
+			ids2: ids2 + 1
 		]
+		count/1: num
 		free as byte-ptr! ids
 		list
 	]
 
-	get-devices: func [
-		mode		[integer!]			;-- 0 for output, 1 for input, 2 for all
-		count		[int-ptr!]			;-- number of input devices
-		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
-		/local
-			num		[integer!]
-			list	[int-ptr!]
-			iter	[int-ptr!]
-			num2	[integer!]
-			cdev	[COREAUDIO-DEVICE!]
-			nlist	[int-ptr!]
-			niter	[int-ptr!]
+	input-devices: func [
+		count		[int-ptr!]				;-- number of input devices
+		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
 	][
-		num: 0
-		list: get-devices* :num
-		if num = 0 [return null]
-		iter: list
-		num2: 0
-		loop num [
-			cdev: as COREAUDIO-DEVICE! iter/1
-			if any [
-				all [
-					mode = 0
-					cdev/type = ADEVICE-TYPE-OUTPUT
-				]
-				all [
-					mode = 1
-					cdev/type = ADEVICE-TYPE-INPUT
-				]
-				all [
-					mode = 2
-					cdev/type <> -1
-				]
-			][
-				num2: num2 + 1
-			]
-			iter: iter + 1
-		]
-		if num2 = 0 [return null]
-		count/1: num2
-		nlist: as int-ptr! allocate num2 + 1 * 4
-		niter: nlist + num2
-		niter/1: 0
-		niter: nlist
-		iter: list
-		loop num [
-			cdev: as COREAUDIO-DEVICE! iter/1
-			either any [
-				all [
-					mode = 0
-					cdev/type = ADEVICE-TYPE-OUTPUT
-				]
-				all [
-					mode = 1
-					cdev/type = ADEVICE-TYPE-INPUT
-				]
-				all [
-					mode = 2
-					cdev/type <> -1
-				]
-			][
-				niter/1: iter/1
-				niter: niter + 1
-			][
-				free-device as int-ptr! cdev
-			]
-			iter: iter + 1
-		]
-		free as byte-ptr! list
-		nlist
+		get-devices ADEVICE-TYPE-INPUT count
+	]
+
+	output-devices: func [
+		count		[int-ptr!]				;-- number of output devices
+		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
+	][
+		get-devices ADEVICE-TYPE-OUTPUT count
 	]
 
 	all-devices: func [
-		count		[int-ptr!]			;-- number of input devices
-		return:		[AUDIO-DEVICE!]		;-- an array of AUDIO-DEVICE!
+		count		[int-ptr!]				;-- number of devices
+		return:		[AUDIO-DEVICE!]			;-- an array of AUDIO-DEVICE!
+		/local
+			count1	[integer!]
+			list1	[int-ptr!]
+			count2	[integer!]
+			list2	[int-ptr!]
+			total	[integer!]
+			list	[int-ptr!]
+			end		[int-ptr!]
 	][
-		get-devices 2 count
+		count/1: 0
+		count1: 0
+		list1: output-devices :count1
+		if null? list1 [count1: 0]
+		count2: 0
+		list2: input-devices :count2
+		if null? list2 [count2: 0]
+		if all [count1 = 0 count2 = 0][return null]
+		total: count1 + count2
+		list: as int-ptr! allocate total + 1 * 4
+		end: list + count/1
+		end/1: 0
+		if count1 <> 0 [
+			copy-memory as byte-ptr! list as byte-ptr! list1 count1 * 4
+			free as byte-ptr! list1
+		]
+		if count2 <> 0 [
+			copy-memory as byte-ptr! list + count1 as byte-ptr! list2 count2 * 4
+			free as byte-ptr! list2
+		]
+		count/1: total
+		list
 	]
 
 	free-device: func [
