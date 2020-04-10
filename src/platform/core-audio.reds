@@ -697,7 +697,7 @@ OS-audio: context [
 			cdev	[COREAUDIO-DEVICE!]
 	][
 		if null? dev [exit]
-		;-- stop dev
+		stop dev
 		cdev: as COREAUDIO-DEVICE! dev
 		type-string/release cdev/id-str
 		type-string/release cdev/name
@@ -809,7 +809,8 @@ OS-audio: context [
 	][
 		cdev: as COREAUDIO-DEVICE! dev
 		if cdev/running? [return false]
-		false
+		if cdev/channel <> AUDIO-SPEAKER-STEREO [return false]
+		true
 	]
 
 	buffer-size: func [
