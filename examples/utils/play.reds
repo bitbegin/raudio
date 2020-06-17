@@ -195,7 +195,6 @@ play: context [
 			print-line "can't start device"
 			return false
 		]
-		sleep 9 * 1000						;-- TBD: need to sleep, otherwise not word
 		audio-device/wait dev
 		true
 	]

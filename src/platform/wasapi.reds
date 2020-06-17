@@ -1396,7 +1396,7 @@ OS-audio: context [
 			unless null? wdev/io-cb [
 				process dev wdev/io-cb
 			]
-			wait dev
+			WaitForSingleObject wdev/event -1
 		]
 	]
 
@@ -1454,9 +1454,9 @@ OS-audio: context [
 		wdev: as WASAPI-DEVICE! dev
 		if wdev/running? [
 			wdev/running?: no
-			unless null? wdev/thread [
-				WaitForSingleObject wdev/thread -1
-			]
+			;unless null? wdev/thread [
+			;	WaitForSingleObject wdev/thread -1
+			;]
 			unless null? wdev/client [
 				pclient: as IAudioClient wdev/client/vtbl
 				pclient/Stop wdev/client
@@ -1478,7 +1478,9 @@ OS-audio: context [
 			wdev	[WASAPI-DEVICE!]
 	][
 		wdev: as WASAPI-DEVICE! dev
-		WaitForSingleObject wdev/event -1
+		unless null? wdev/thread [
+			WaitForSingleObject wdev/thread -1
+		]
 	]
 
 	sleep: func [
