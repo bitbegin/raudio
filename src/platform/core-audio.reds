@@ -1055,8 +1055,13 @@ OS-audio: context [
 
 	wait: func [
 		dev			[AUDIO-DEVICE!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
 	][
-		0
+		cdev: as COREAUDIO-DEVICE! dev
+		while [cdev/running?][						;-- simulate `wait event`
+			usleep 10000
+		]
 	]
 
 	sleep: func [
