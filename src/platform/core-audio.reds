@@ -526,7 +526,7 @@ OS-audio: context [
 				p: p + 1
 			]
 		]
-		print ["^/    formats: "]
+		print ["^/    format: "]
 		case [
 			cdev/format = ASAMPLE-TYPE-F32 [
 				print-line "float32!"
