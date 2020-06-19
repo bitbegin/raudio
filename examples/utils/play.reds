@@ -10,7 +10,7 @@ play: context [
 	ebuffer: as byte-ptr! 0
 	buf-len: 0
 	pos: 0
-	M1FLOAT32: as float32! 65536.0
+	M1FLOAT32: as float32! 32768.0
 	M2FLOAT32: as float32! 2.147483648E9
 
 	wave-cb: func [
@@ -59,6 +59,11 @@ play: context [
 							set-type = ASAMPLE-TYPE-I16 [
 								itemp: as integer! sbuf/1
 								itemp: (as integer! sbuf/2) << 8 + itemp
+								if itemp >= 32768 [
+									bp: as byte-ptr! :itemp
+									bp/3: #"^(FF)"
+									bp/4: #"^(FF)"
+								]
 								rfp/1: as float32! itemp
 								rfp/1: rfp/1 / M1FLOAT32
 							]
