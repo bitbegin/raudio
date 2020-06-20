@@ -949,8 +949,8 @@ OS-audio: context [
 	][
 		if null? ptr-to-this [return -1]
 		cdev: as COREAUDIO-DEVICE! ptr-to-this
-		if odev/stop? [
-			stop dev
+		if cdev/stop? [
+			stop ptr-to-this
 			return 0
 		]
 		if cdev/type = ADEVICE-TYPE-OUTPUT [
