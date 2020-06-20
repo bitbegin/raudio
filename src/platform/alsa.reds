@@ -322,6 +322,15 @@ OS-audio: context [
 				timeout		[integer!]
 				return:		[integer!]
 			]
+			snd_pcm_delay: "snd_pcm_delay" [
+				pcm			[integer!]
+				delayp		[int-ptr!]
+				return:		[integer!]
+			]
+			snd_pcm_avail_update: "snd_pcm_avail_update" [
+				pcm			[integer!]
+				return:		[integer!]
+			]
 			snd_async_add_pcm_handler: "snd_async_add_pcm_handler" [
 				handler		[int-ptr!]
 				pcm			[integer!]
@@ -1342,6 +1351,7 @@ OS-audio: context [
 		return:		[int-ptr!]
 		/local
 			adev	[ALSA-DEVICE!]
+			avail	[integer!]
 			abuff	[AUDIO-DEVICE-IO! value]
 			pcb		[AUDIO-IO-CALLBACK!]
 			temp	[integer!]
@@ -1354,10 +1364,23 @@ OS-audio: context [
 		while [adev/running?][
 			;-- output
 			if adev/type = ADEVICE-TYPE-OUTPUT [
+				avail: snd_pcm_avail_update adev/pcm
+				if avail < 0 [
+					;print-line snd_strerror avail
+					break
+				]
+				if avail = 0 [
+					avail: adev/buffer-size / 4
+					snd_pcm_delay adev/pcm :avail
+					continue
+				]
+				if avail > adev/buffer-size [
+					avail: adev/buffer-size
+				]
 				pcb: as AUDIO-IO-CALLBACK! adev/io-cb
 				set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
 				abuff/buffer/sample-type: adev/format
-				abuff/buffer/frames-count: adev/buffer-size
+				abuff/buffer/frames-count: avail
 				temp: speaker-channels adev/channel
 				abuff/buffer/channels-count: temp
 				abuff/buffer/stride: temp
@@ -1371,7 +1394,7 @@ OS-audio: context [
 					step: step + size
 				]
 				pcb arg abuff
-				hr: snd_pcm_writei adev/pcm adev/buffer adev/buffer-size
+				hr: snd_pcm_writei adev/pcm adev/buffer avail
 				if hr < 0 [
 					;print-line snd_pcm_state_name snd_pcm_state adev/pcm
 					;print-line ["write: " hr " " snd_strerror hr]
@@ -1381,12 +1404,25 @@ OS-audio: context [
 				continue
 			]
 			if adev/type = ADEVICE-TYPE-INPUT [
-				hr: snd_pcm_readi adev/pcm adev/buffer adev/buffer-size
-				if hr <> adev/buffer-size [break]
+				avail: snd_pcm_avail_update adev/pcm
+				if avail < 0 [
+					;print-line snd_strerror avail
+					break
+				]
+				if avail = 0 [
+					avail: adev/buffer-size / 4
+					snd_pcm_delay adev/pcm :avail
+					continue
+				]
+				if avail > adev/buffer-size [
+					avail: adev/buffer-size
+				]
+				hr: snd_pcm_readi adev/pcm adev/buffer avail
+				if hr <> avail [break]
 				pcb: as AUDIO-IO-CALLBACK! adev/io-cb
 				set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
 				abuff/buffer/sample-type: adev/format
-				abuff/buffer/frames-count: adev/buffer-size
+				abuff/buffer/frames-count: avail
 				temp: speaker-channels adev/channel
 				abuff/buffer/channels-count: temp
 				abuff/buffer/stride: temp
