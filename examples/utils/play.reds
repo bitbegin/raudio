@@ -140,7 +140,7 @@ play: context [
 		]
 		buffer: buffer + (out/frames-count * out/stride * sw)
 		if buffer >= ebuffer [
-			audio-device/stop dev
+			audio-device/inner-stop dev
 		]
 	]
 

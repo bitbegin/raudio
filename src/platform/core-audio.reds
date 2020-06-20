@@ -97,6 +97,7 @@ OS-audio: context [
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
+		stop?			[logic!]
 		buffer-size		[integer!]
 		channels		[int-ptr!]						;-- support channels list
 		channels-count	[integer!]
@@ -948,6 +949,10 @@ OS-audio: context [
 	][
 		if null? ptr-to-this [return -1]
 		cdev: as COREAUDIO-DEVICE! ptr-to-this
+		if odev/stop? [
+			stop dev
+			return 0
+		]
 		if cdev/type = ADEVICE-TYPE-OUTPUT [
 			set-memory as byte-ptr! abuff #"^(00)" size? AUDIO-DEVICE-IO!
 			if output_data/mNumberBuffers <> 1 [return 1]
@@ -1020,6 +1025,7 @@ OS-audio: context [
 			]
 		]
 		cdev/running?: yes
+		cdev/stop?: no
 
 		unless null? start-cb [
 			start_cb: as AUDIO-DEVICE-CALLBACK! start-cb
@@ -1051,6 +1057,15 @@ OS-audio: context [
 			cdev/running?: no
 		]
 		true
+	]
+
+	inner-stop: func [
+		dev			[AUDIO-DEVICE!]
+		/local
+			cdev	[COREAUDIO-DEVICE!]
+	][
+		cdev: as COREAUDIO-DEVICE! dev
+		cdev/stop?: yes
 	]
 
 	wait: func [

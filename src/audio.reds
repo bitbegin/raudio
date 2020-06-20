@@ -369,6 +369,14 @@ audio-device: context [
 		OS-audio/stop dev
 	]
 
+	inner-stop: func [
+		dev			[AUDIO-DEVICE!]
+		return:		[logic!]
+	][
+		OS-audio/inner-stop dev
+		yes
+	]
+
 	wait: func [
 		dev			[AUDIO-DEVICE!]
 	][

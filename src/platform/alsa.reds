@@ -322,6 +322,15 @@ OS-audio: context [
 				timeout		[integer!]
 				return:		[integer!]
 			]
+			snd_pcm_nonblock: "snd_pcm_nonblock" [
+				pcm			[integer!]
+				block		[integer!]
+				return:		[integer!]
+			]
+			snd_pcm_drain: "snd_pcm_drain" [
+				pcm			[integer!]
+				return:		[integer!]
+			]
 			snd_pcm_delay: "snd_pcm_delay" [
 				pcm			[integer!]
 				delayp		[int-ptr!]
@@ -358,6 +367,7 @@ OS-audio: context [
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
+		stop?			[logic!]
 		buffer-size		[integer!]
 		channels		[int-ptr!]						;-- support channels list
 		channels-count	[integer!]
@@ -1362,6 +1372,11 @@ OS-audio: context [
 	][
 		adev: as ALSA-DEVICE! arg
 		while [adev/running?][
+			if adev/stop? [
+				snd_pcm_drain adev/pcm
+				stop arg
+				return arg
+			]
 			;-- output
 			if adev/type = ADEVICE-TYPE-OUTPUT [
 				avail: snd_pcm_avail_update adev/pcm
@@ -1462,8 +1477,11 @@ OS-audio: context [
 		id: as c-string! p + 1
 		hr: snd_pcm_open :adev/pcm id adev/type 0
 		if hr <> 0 [return false]
+		hr: snd_pcm_nonblock adev/pcm 0
+		if hr <> 0 [return false]
 		unless prepare-hw-params adev adev/pcm [return false]
 		adev/running?: yes
+		adev/stop?: no
 		chs: speaker-channels adev/channel
 		size: either adev/format = ASAMPLE-TYPE-I16 [2][4]
 		size: size * chs * adev/buffer-size
@@ -1507,6 +1525,15 @@ OS-audio: context [
 			snd_pcm_close adev/pcm
 		]
 		true
+	]
+
+	inner-stop: func [
+		dev			[AUDIO-DEVICE!]
+		/local
+			adev	[ALSA-DEVICE!]
+	][
+		adev: as ALSA-DEVICE! dev
+		adev/stop?: yes
 	]
 
 	wait: func [

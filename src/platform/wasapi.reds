@@ -115,6 +115,7 @@ OS-audio: context [
 		io-cb			[int-ptr!]
 		stop-cb			[int-ptr!]
 		running?		[logic!]
+		stop?			[logic!]
 		event			[int-ptr!]
 		service			[this!]
 		thread			[int-ptr!]
@@ -1393,6 +1394,10 @@ OS-audio: context [
 		wdev: as WASAPI-DEVICE! dev
 		SetThreadPriority wdev/thread 15
 		while [wdev/running?][
+			if wdev/stop? [
+				stop dev
+				break
+			]
 			unless null? wdev/io-cb [
 				process dev wdev/io-cb
 			]
@@ -1431,6 +1436,7 @@ OS-audio: context [
 		hr: pclient/Start wdev/client
 		if hr <> 0 [return false]
 		wdev/running?: yes
+		wdev/stop?: no
 
 		unless null? wdev/io-cb [
 			wdev/thread: _beginthreadex null 0 as int-ptr! :thread-cb dev 0 null
@@ -1470,6 +1476,15 @@ OS-audio: context [
 			]
 		]
 		true
+	]
+
+	inner-stop: func [
+		dev			[AUDIO-DEVICE!]
+		/local
+			wdev	[WASAPI-DEVICE!]
+	][
+		wdev: as WASAPI-DEVICE! dev
+		wdev/stop?: yes
 	]
 
 	wait: func [
